@@ -19,6 +19,7 @@ import { apiClient } from "@/lib/api";
 import { getRiskColor } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/components/ui/Toast";
+import { useAiTasks } from "@/lib/ai-task-context";
 import type { Drug, PrescriptionCheckResult, AlternativeDrug } from "@/lib/types";
 
 interface AiSuggestion {
@@ -71,6 +72,7 @@ function PrescribeContent() {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const { user, hasAi, aiHeaders } = useAuth();
   const { toast } = useToast();
+  const { addTask, completeTask, failTask, getLatestByType } = useAiTasks();
   const voice = useVoice();
   const [prescribeDose, setPrescribeDose] = useState("");
   const [prescribeFreq, setPrescribeFreq] = useState("");
@@ -145,10 +147,23 @@ function PrescribeContent() {
 
   const selectedPatientName = patients.find((p) => p.id === selectedPatient)?.name;
 
+  // Check for background task result on mount
+  const bgSuggestions = getLatestByType("prescription-suggestions");
+  if (bgSuggestions?.status === "done" && bgSuggestions.result && aiSuggestions.length === 0 && !loadingSuggestions) {
+    if (aiSuggestions.length === 0) {
+      setAiSuggestions(bgSuggestions.result.suggestions ?? []);
+      setAiSuggestModel(bgSuggestions.result.ai_model ?? "");
+    }
+  }
+
   async function fetchAiSuggestions() {
     if (!selectedPatient) return;
     setLoadingSuggestions(true);
     setAiSuggestions([]);
+    const patientName = patients.find((p) => p.id === selectedPatient)?.name ?? "Patient";
+    const taskId = addTask("prescription-suggestions", `Prescription Suggestions — ${patientName}`, selectedPatient, patientName);
+    toast("Generating suggestions in background — you can navigate away", "info");
+
     try {
       const res = await fetch("/api/ai/suggest-prescription", {
         method: "POST", headers: aiHeaders(),
@@ -158,6 +173,7 @@ function PrescribeContent() {
       if (data.success && data.data?.suggestions) {
         setAiSuggestions(data.data.suggestions);
         setAiSuggestModel(data.data.ai_model ?? "");
+        completeTask(taskId, data.data);
         const model = data.data.ai_model;
         const aiError = data.data.ai_error;
         if (model === "rule-based" && aiError) {
@@ -169,8 +185,9 @@ function PrescribeContent() {
         }
       } else {
         toast("No suggestions available for this patient", "info");
+        failTask(taskId, "No suggestions returned");
       }
-    } catch { toast("Failed to get suggestions — check your connection", "error"); }
+    } catch (err) { toast("Failed to get suggestions — check your connection", "error"); failTask(taskId, String(err)); }
     setLoadingSuggestions(false);
   }
 

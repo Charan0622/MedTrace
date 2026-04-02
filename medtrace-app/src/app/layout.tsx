@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/auth-context";
+import { AiTaskProvider } from "@/lib/ai-task-context";
 import { AppShell } from "@/components/layout/AppShell";
 import { ToastProvider } from "@/components/ui/Toast";
 import "./globals.css";
@@ -31,9 +32,11 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable} h-full`}>
       <body className="min-h-full antialiased">
         <AuthProvider>
-          <ToastProvider>
-            <AppShell>{children}</AppShell>
-          </ToastProvider>
+          <AiTaskProvider>
+            <ToastProvider>
+              <AppShell>{children}</AppShell>
+            </ToastProvider>
+          </AiTaskProvider>
         </AuthProvider>
       </body>
     </html>

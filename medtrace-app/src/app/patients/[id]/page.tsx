@@ -27,6 +27,7 @@ import { generatePatientPdf } from "@/lib/generate-pdf";
 import { DrugInfoModal } from "@/components/patient/DrugInfoModal";
 import { MarkdownRenderer } from "@/components/ui/MarkdownRenderer";
 import { AiLoadingTip } from "@/components/ui/AiLoadingTip";
+import { useAiTasks } from "@/lib/ai-task-context";
 import { AICopilot } from "@/components/patient/AICopilot";
 import type { Patient } from "@/lib/types";
 
@@ -36,6 +37,7 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const { user, aiHeaders } = useAuth();
   const { toast } = useToast();
+  const { addTask, completeTask, failTask, getLatestByType } = useAiTasks();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [loading, setLoading] = useState(true);
   const [instructions, setInstructions] = useState<Row[]>([]);
@@ -124,17 +126,28 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
       }
     }).catch(() => { setGeneratingPlan(false); });
 
-    // Detailed model — runs in background, takes longer
+    // Detailed model — runs in background via global task manager
+    const taskId = addTask("care-plan", `${planType === "discharge" ? "Discharge" : "Current"} Care Plan — ${patient?.name ?? "Patient"}`, id, patient?.name);
+    toast("Detailed report generating in background — you can navigate away", "info");
+
     fetch("/api/ai/care-plan/dual", {
       method: "POST", headers,
       body: JSON.stringify({ patient_id: id, plan_type: planType, phase: "detailed" }),
     }).then((r) => r.json()).then((res) => {
       if (res.success && res.data) {
         setCarePlan(res.data);
-        setFastPlan(null); // Clear fast plan once detailed is ready
+        setFastPlan(null);
+        completeTask(taskId, res.data);
       }
       setDetailedLoading(false);
-    }).catch(() => { setDetailedLoading(false); });
+    }).catch((err) => { setDetailedLoading(false); failTask(taskId, String(err)); });
+  }
+
+  // Check for background task results on mount
+  const bgTask = getLatestByType("care-plan", id);
+  if (bgTask?.status === "done" && bgTask.result && !carePlan && !generatingPlan) {
+    // Auto-load result from background task
+    if (!carePlan) setCarePlan(bgTask.result);
   }
 
   async function runVitalsAnalysis() {

@@ -10,6 +10,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { MarkdownRenderer } from "@/components/ui/MarkdownRenderer";
 import { AiLoadingTip } from "@/components/ui/AiLoadingTip";
 import { useAuth } from "@/lib/auth-context";
+import { useAiTasks } from "@/lib/ai-task-context";
+import { useToast } from "@/components/ui/Toast";
 import { generateHandoffPdf } from "@/lib/generate-handoff-pdf";
 
 interface PatientDetail {
@@ -27,9 +29,24 @@ export default function HandoffPage() {
   const [patients, setPatients] = useState<PatientDetail[]>([]);
   const [generating, setGenerating] = useState(false);
   const { aiHeaders, user } = useAuth();
+  const { addTask, completeTask, failTask, getLatestByType } = useAiTasks();
+  const { toast } = useToast();
+
+  // Check for background task result on mount
+  const bgTask = getLatestByType("shift-handoff");
+  if (bgTask?.status === "done" && bgTask.result && !report && !generating) {
+    if (!report) {
+      setReport(bgTask.result.report);
+      setAiModel(bgTask.result.ai_model ?? "rule-based");
+      setPatients(bgTask.result.patients ?? []);
+    }
+  }
 
   async function generateReport() {
     setGenerating(true);
+    const taskId = addTask("shift-handoff", "Shift Handoff Report");
+    toast("Generating in background — you can navigate away", "info");
+
     try {
       const r = await fetch("/api/ai/shift-handoff", { method: "POST", headers: aiHeaders() });
       const res = await r.json();
@@ -37,8 +54,9 @@ export default function HandoffPage() {
         setReport(res.data.report);
         setAiModel(res.data.ai_model ?? "rule-based");
         setPatients(res.data.patients ?? []);
+        completeTask(taskId, res.data);
       }
-    } catch { /* ignore */ }
+    } catch (err) { failTask(taskId, String(err)); }
     setGenerating(false);
   }
 
