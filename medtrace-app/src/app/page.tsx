@@ -163,7 +163,7 @@ export default function NursingStationPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-[#F0FDF4] tracking-tight">
-          {user ? `Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, ${user.name}` : "Nursing Station"}
+          {user ? `Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, ${user.name}` : "MedTrace"}
         </h1>
         <p className="text-sm text-[#6B7280] mt-1">
           {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })} — {occupied} patients admitted

@@ -1,6 +1,6 @@
 // ============================================================
 // MedTrace — App-Wide TypeScript Interfaces
-// Hospital Nursing Station + Drug Safety Platform
+// AI-Powered Care Intelligence Platform
 // ============================================================
 
 // === Auth & Roles ===

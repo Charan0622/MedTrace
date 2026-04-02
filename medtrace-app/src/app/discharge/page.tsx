@@ -110,7 +110,7 @@ function DischargeContent() {
           <h2 className="text-2xl font-bold text-[#F0FDF4] mb-2">Patient Discharged</h2>
           <p className="text-[#6B7280] mb-6">{patient.name} has been successfully discharged. Room {patient.room?.room_number} is now available.</p>
           <div className="flex gap-3 justify-center">
-            <Button variant="secondary" onClick={() => router.push("/")}>Back to Nursing Station</Button>
+            <Button variant="secondary" onClick={() => router.push("/")}>Back to Dashboard</Button>
             {carePlan && <Button onClick={() => window.print()}><Download className="h-4 w-4" /> Print Discharge Plan</Button>}
           </div>
         </Card>

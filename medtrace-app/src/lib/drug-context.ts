@@ -97,7 +97,7 @@ export async function generateDrugSummary(drugName: string, apiKey?: string | nu
       timeout: 30000,
     });
 
-    const prompt = `You are a clinical pharmacology AI in a hospital nursing station called MedTrace. Using ONLY the verified drug data below, generate a clear clinical summary.
+    const prompt = `You are a clinical pharmacology AI in a clinical intelligence platform called MedTrace. Using ONLY the verified drug data below, generate a clear clinical summary.
 
 FORMAT:
 ## Overview

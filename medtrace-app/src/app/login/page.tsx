@@ -79,7 +79,7 @@ export default function LoginPage() {
             <Logo size={64} className="shadow-2xl glow-brand" />
           </motion.div>
           <h1 className="text-3xl font-bold text-[#F0FDF4] mt-5 tracking-tight">MedTrace</h1>
-          <p className="text-sm text-[#6B7280] mt-1.5 font-medium">AI-Powered Hospital Nursing Station</p>
+          <p className="text-sm text-[#6B7280] mt-1.5 font-medium">AI-Powered Care Intelligence</p>
         </div>
 
         {/* Step 1: Login */}

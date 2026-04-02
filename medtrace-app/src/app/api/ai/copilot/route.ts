@@ -43,7 +43,7 @@ LABS: ${labs.map((l) => `${l.test_name}: ${l.value} ${l.unit} [${l.status}]`).jo
 NOTES: ${recentNotes.map((n) => `[${n.author}] ${n.content}`).join("; ") || "None"}
 INSTRUCTIONS: ${instructions.filter((i) => i.status !== "completed").map((i) => `[${i.priority}] ${i.instruction}`).join("; ") || "None"}`;
 
-  const systemPrompt = `You are MedTrace Clinical Copilot — an expert AI clinical assistant embedded in a hospital nursing station. You have deep knowledge of pharmacology, pathophysiology, drug interactions, and evidence-based nursing practice.
+  const systemPrompt = `You are MedTrace Clinical Copilot — an expert AI clinical assistant embedded in a clinical intelligence platform. You have deep knowledge of pharmacology, pathophysiology, drug interactions, and evidence-based nursing practice.
 
 ${user_role === "doctor" ? "You are speaking to a PHYSICIAN — use clinical terminology, cite evidence levels, suggest differential diagnoses, reference specific lab values and vital trends, and provide medication adjustment reasoning with pharmacokinetic considerations. Consider the patient's pharmacogenomic profile when discussing drug metabolism." : "You are speaking to a NURSE — focus on bedside assessment priorities, what to monitor and how often, specific parameters that should trigger a call to the physician (with exact numbers), medication administration considerations (timing, food interactions, hold parameters), patient comfort measures, and documentation reminders."}
 

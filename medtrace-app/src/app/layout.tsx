@@ -19,8 +19,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MedTrace — Hospital Nursing Station",
-  description: "AI-powered hospital nursing station for patient monitoring, drug safety, and clinical workflow",
+  title: "MedTrace — AI-Powered Care Intelligence",
+  description: "AI-powered care intelligence platform for patient monitoring, drug safety, and clinical workflow",
 };
 
 export default function RootLayout({

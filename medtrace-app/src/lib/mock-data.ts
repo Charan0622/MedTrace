@@ -1,5 +1,5 @@
 // ============================================================
-// MedTrace — Mock Data (Hospital Nursing Station + Drug Safety)
+// MedTrace — Mock Data (AI-Powered Care Intelligence Platform)
 // ============================================================
 
 import type {

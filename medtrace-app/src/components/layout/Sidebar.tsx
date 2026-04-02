@@ -14,7 +14,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useAiTasks } from "@/lib/ai-task-context";
 
 const NAV_ITEMS = [
-  { label: "Nursing Station", href: "/", icon: LayoutDashboard },
+  { label: "Command Center", href: "/", icon: LayoutDashboard },
   { label: "Patients", href: "/patients", icon: Users },
   { label: "Admit Patient", href: "/admit", icon: UserPlus },
   { label: "Prescribe", href: "/prescribe", icon: Pill },
@@ -47,7 +47,7 @@ export function Sidebar() {
         <Logo size={38} className="shadow-lg glow-brand shrink-0" />
         <div>
           <span className="text-base font-bold text-[#F0FDF4] tracking-tight">MedTrace</span>
-          <p className="text-[10px] text-[#6B7280] font-medium tracking-wider uppercase">Nursing Station</p>
+          <p className="text-[10px] text-[#6B7280] font-medium tracking-wider uppercase">AI-Powered Care Intelligence</p>
         </div>
       </Link>
 
