@@ -47,3 +47,16 @@ next-env.d.ts
 
 # node_modules everywhere
 **/node_modules
+
+# next.js build everywhere
+**/.next/
+
+# Claude/AI assistant files
+CLAUDE.md
+.claude/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getProviderAndKey, generateAiResponse, formatAiError } from "@/lib/ai-client";
-import { retrieveDrugContext } from "@/lib/gemini";
+import { retrieveDrugContext } from "@/lib/drug-context";
 import { getDb } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import crypto from "crypto";

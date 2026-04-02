@@ -97,6 +97,69 @@ export default function NursingStationPage() {
 
   return (
     <div className="space-y-8">
+      {/* Keyframes for ticker animations */}
+      <style>{`
+        @keyframes scroll-left { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        @keyframes scroll-right { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+      `}</style>
+
+      {/* Scrolling Tickers */}
+      <div className="space-y-2 -mt-4 mb-2">
+        {/* Health Tips & Achievements — scrolls left */}
+        <div className="overflow-hidden rounded-xl bg-white/[0.02] border border-white/[0.04]">
+          <div className="flex whitespace-nowrap py-2" style={{ animation: "scroll-left 30s linear infinite" }}>
+            {[...Array(2)].map((_, dup) => (
+              <div key={dup} className="flex items-center gap-8 px-4">
+                {[
+                  "\u{1F3E5} MedTrace Hospital \u2014 99.7% Patient Satisfaction Rate",
+                  "\u{1F3C6} Awarded Best Digital Health Platform 2026",
+                  "\u{1F48A} 5-Layer Drug Safety Architecture Active",
+                  "\u{1F4CA} Real-time vitals monitoring for all admitted patients",
+                  "\u{1FA7A} AI-powered clinical decision support",
+                  "\u2764\uFE0F Zero medication errors this quarter",
+                  "\u{1F52C} Pharmacogenomic profiling available for all patients",
+                  "\u{1F31F} Joint Commission Gold Seal of Approval",
+                ].map((tip, i) => (
+                  <span key={`${dup}-${i}`} className="text-xs text-[#6B7280] flex items-center gap-2">
+                    <span className="h-1 w-1 rounded-full bg-emerald-500/50" />
+                    {tip}
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Doctors on Duty — scrolls right */}
+        <div className="overflow-hidden rounded-xl bg-white/[0.02] border border-white/[0.04]">
+          <div className="flex whitespace-nowrap py-2" style={{ animation: "scroll-right 30s linear infinite" }}>
+            {[...Array(2)].map((_, dup) => (
+              <div key={dup} className="flex items-center gap-6 px-4">
+                {patients.filter(p => p.doctor?.name).reduce((unique: {name: string; spec: string}[], p) => {
+                  const name = String(p.doctor?.name ?? "");
+                  if (name && !unique.find(u => u.name === name)) unique.push({ name, spec: String(p.doctor?.specialization ?? "") });
+                  return unique;
+                }, []).length > 0 ?
+                  patients.filter(p => p.doctor?.name).reduce((unique: {name: string; spec: string}[], p) => {
+                    const name = String(p.doctor?.name ?? "");
+                    if (name && !unique.find(u => u.name === name)) unique.push({ name, spec: String(p.doctor?.specialization ?? "") });
+                    return unique;
+                  }, []).map((doc, i) => (
+                    <span key={`${dup}-${i}`} className="text-xs text-[#D1D5DB] flex items-center gap-2">
+                      <span className="h-5 w-5 rounded-full bg-sky-500/15 text-sky-400 flex items-center justify-center text-[8px] font-bold">{doc.name.split(" ").map(n => n[0]).join("").slice(0,2)}</span>
+                      <span className="font-medium">{doc.name}</span>
+                      <span className="text-[#6B7280]">({doc.spec})</span>
+                    </span>
+                  )) : (
+                    <span className="text-xs text-[#6B7280]">Loading doctors on duty...</span>
+                  )
+                }
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-[#F0FDF4] tracking-tight">

@@ -7,9 +7,11 @@ import {
   LayoutDashboard, Users, Pill, AlertTriangle, ClipboardList,
   Activity, LogOut, FileText, UserPlus, Stethoscope, ChevronRight, BarChart3,
 } from "lucide-react";
+import { Brain, CheckCircle2, AlertTriangle as TriAlert, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/ui/Logo";
 import { useAuth } from "@/lib/auth-context";
+import { useAiTasks } from "@/lib/ai-task-context";
 
 const NAV_ITEMS = [
   { label: "Nursing Station", href: "/", icon: LayoutDashboard },
@@ -19,6 +21,7 @@ const NAV_ITEMS = [
   { label: "Instructions", href: "/instructions", icon: ClipboardList },
   { label: "Vitals Entry", href: "/vitals", icon: Activity },
   { label: "Analytics", href: "/analytics", icon: BarChart3 },
+  { label: "Staff On Duty", href: "/staff", icon: Users },
   { label: "Shift Handoff", href: "/handoff", icon: FileText },
   { label: "Recalls", href: "/recalls", icon: AlertTriangle },
 ];
@@ -27,6 +30,8 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout, hasAi } = useAuth();
+  const { tasks, pendingCount, markSeen, clearTask } = useAiTasks();
+  const activeTasks = tasks.filter((t) => !t.seen || t.status === "pending");
 
   function handleLogout() {
     logout();
@@ -110,6 +115,37 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      {/* AI Tasks */}
+      {activeTasks.length > 0 && (
+        <div className="mx-4 mb-2">
+          <p className="text-[9px] text-[#6B7280] uppercase tracking-wider font-semibold mb-1.5 px-1">
+            <Brain className="h-3 w-3 inline mr-1 text-emerald-400" />
+            AI Tasks ({pendingCount > 0 ? `${pendingCount} running` : "done"})
+          </p>
+          <div className="space-y-1 max-h-32 overflow-y-auto">
+            {activeTasks.map((task) => {
+              const linkHref = task.type === "care-plan" && task.patientId ? `/patients/${task.patientId}` :
+                               task.type === "shift-handoff" ? "/handoff" :
+                               task.type === "prescription-suggestions" ? "/prescribe" : null;
+              return (
+                <div key={task.id} className="flex items-center gap-2 rounded-lg bg-white/[0.02] px-2 py-1.5">
+                  {task.status === "pending" && <Loader2 className="h-3 w-3 text-emerald-400 animate-spin shrink-0" />}
+                  {task.status === "done" && <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />}
+                  {task.status === "error" && <TriAlert className="h-3 w-3 text-red-400 shrink-0" />}
+                  <span className="text-[10px] text-[#D1D5DB] truncate flex-1">{task.label}</span>
+                  {task.status === "done" && linkHref && (
+                    <Link href={linkHref} onClick={() => markSeen(task.id)} className="text-[9px] text-emerald-400 font-semibold shrink-0">View</Link>
+                  )}
+                  {task.status !== "pending" && (
+                    <button onClick={() => clearTask(task.id)} className="text-[#6B7280] hover:text-[#D1D5DB] shrink-0"><X className="h-2.5 w-2.5" /></button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="mx-4 mb-4 rounded-xl bg-white/[0.02] px-3 py-2.5">
