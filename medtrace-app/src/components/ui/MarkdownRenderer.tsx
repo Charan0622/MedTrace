@@ -32,9 +32,10 @@ function parseBlocks(content: string): Block[] {
 
   while (i < lines.length) {
     const line = lines[i];
+    const trimmed = line.trim();
 
     // Table detection: line with pipes
-    if (line.includes("|") && line.trim().startsWith("|")) {
+    if (trimmed.startsWith("|") && trimmed.includes("|", 1)) {
       const tableLines: string[] = [];
       while (i < lines.length && lines[i].includes("|")) {
         tableLines.push(lines[i]);
@@ -43,23 +44,51 @@ function parseBlocks(content: string): Block[] {
       const parsed = parseTable(tableLines);
       if (parsed) {
         blocks.push(parsed);
-        continue; // i already advanced past the table
+        continue;
       }
-      // If table parse failed, rewind and treat first line as paragraph
       i -= tableLines.length;
     }
 
-    if (line.startsWith("### ")) { blocks.push({ type: "heading", level: 3, text: line.slice(4) }); }
-    else if (line.startsWith("## ")) { blocks.push({ type: "heading", level: 2, text: line.slice(3) }); }
-    else if (line.startsWith("# ")) { blocks.push({ type: "heading", level: 1, text: line.slice(2) }); }
-    else if (line.startsWith("---") || line.startsWith("***")) { blocks.push({ type: "hr" }); }
-    else if (line.startsWith("- ") || line.startsWith("* ")) { blocks.push({ type: "bullet", text: line.slice(2) }); }
-    else if (/^\d+\.\s/.test(line)) { const match = line.match(/^(\d+)\.\s(.*)$/); blocks.push({ type: "numbered", num: match?.[1] ?? "", text: match?.[2] ?? line }); }
-    else if (line.startsWith("```")) { blocks.push({ type: "code", text: line.slice(3) }); }
-    else if (/^[|:\-\s]+$/.test(line.trim())) { blocks.push({ type: "empty" }); } // skip table separator lines
-    else if (line.trim() === "") { blocks.push({ type: "empty" }); }
-    else { blocks.push({ type: "paragraph", text: line }); }
+    // Table separator lines (|---|---|)
+    if (/^[\s|:\-]+$/.test(trimmed) && trimmed.includes("|")) { i++; continue; }
 
+    // Headings: ##### → level 5, #### → 4, ### → 3, ## → 2, # → 1
+    // Also handle "##### ### text" pattern (strip extra hashes)
+    const headingMatch = trimmed.match(/^(#{1,6})\s+(?:#{1,6}\s+)*(.*)/);
+    if (headingMatch) {
+      const level = Math.min(headingMatch[1].length, 4);
+      const text = headingMatch[2].replace(/^#+\s*/, "").trim();
+      if (text) {
+        blocks.push({ type: "heading", level, text });
+        i++; continue;
+      }
+    }
+
+    // Horizontal rules
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) { blocks.push({ type: "hr" }); i++; continue; }
+
+    // Bullet points: - text, * text, • text, · text
+    if (/^[-*•·]\s+/.test(trimmed)) {
+      const text = trimmed.replace(/^[-*•·]\s+/, "");
+      blocks.push({ type: "bullet", text });
+      i++; continue;
+    }
+
+    // Numbered lists: 1. text, 1) text
+    const numMatch = trimmed.match(/^(\d+)[.)]\s+(.*)/);
+    if (numMatch) {
+      blocks.push({ type: "numbered", num: numMatch[1], text: numMatch[2] });
+      i++; continue;
+    }
+
+    // Code fence
+    if (trimmed.startsWith("```")) { blocks.push({ type: "code", text: trimmed.slice(3) }); i++; continue; }
+
+    // Empty lines
+    if (trimmed === "") { blocks.push({ type: "empty" }); i++; continue; }
+
+    // Everything else is a paragraph
+    blocks.push({ type: "paragraph", text: trimmed });
     i++;
   }
 
@@ -74,9 +103,8 @@ function parseTable(lines: string[]): Block | null {
 
   const headers = parseLine(lines[0]);
 
-  // Skip separator line (---|---|---)
   let dataStart = 1;
-  if (lines[1] && /^[\s|:-]+$/.test(lines[1])) dataStart = 2;
+  if (lines[1] && /^[\s|:\-]+$/.test(lines[1])) dataStart = 2;
 
   const rows = lines.slice(dataStart).map(parseLine).filter((r) => r.length > 0);
 
@@ -89,18 +117,15 @@ function renderInline(text: string): React.ReactNode {
   const parts = text.split(/(\*\*.*?\*\*|__.*?__|`.*?`|\*[^*]+?\*)/g);
   return parts.map((part, i) => {
     if (!part) return null;
-    // Bold **text** or __text__
-    if ((part.startsWith("**") && part.endsWith("**"))) {
+    if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
       return <strong key={i} className="text-[#F0FDF4] font-semibold">{part.slice(2, -2)}</strong>;
     }
-    if ((part.startsWith("__") && part.endsWith("__"))) {
+    if (part.startsWith("__") && part.endsWith("__") && part.length > 4) {
       return <strong key={i} className="text-[#F0FDF4] font-semibold">{part.slice(2, -2)}</strong>;
     }
-    // Inline code `text`
-    if (part.startsWith("`") && part.endsWith("`") && part.length > 1) {
+    if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
       return <code key={i} className="bg-white/[0.04] px-1.5 py-0.5 rounded text-emerald-400 text-xs font-mono">{part.slice(1, -1)}</code>;
     }
-    // Italic *text* (single asterisk, not empty)
     if (part.startsWith("*") && part.endsWith("*") && !part.startsWith("**") && part.length > 2) {
       return <em key={i} className="text-[#A1A1AA] italic">{part.slice(1, -1)}</em>;
     }
@@ -111,15 +136,17 @@ function renderInline(text: string): React.ReactNode {
 function renderBlock(block: Block, key: number): React.ReactNode {
   switch (block.type) {
     case "heading":
-      if (block.level === 1) return <h2 key={key} className="text-lg font-bold text-[#F0FDF4] mt-4 mb-1 flex items-center gap-2">{renderInline(block.text)}</h2>;
+      if (block.level === 1) return <h2 key={key} className="text-lg font-bold text-[#F0FDF4] mt-5 mb-2 flex items-center gap-2">{renderInline(block.text)}</h2>;
       if (block.level === 2) return <h3 key={key} className="text-base font-semibold text-[#F0FDF4] mt-4 mb-1.5 pb-1 border-b border-emerald-500/20 flex items-center gap-2">{renderInline(block.text)}</h3>;
-      return <h4 key={key} className="text-sm font-semibold text-[#D1D5DB] mt-2 mb-1">{renderInline(block.text)}</h4>;
+      if (block.level === 3) return <h4 key={key} className="text-sm font-semibold text-emerald-400 mt-3 mb-1">{renderInline(block.text)}</h4>;
+      // level 4+ (####, #####)
+      return <h5 key={key} className="text-sm font-medium text-[#D1D5DB] mt-2 mb-1">{renderInline(block.text)}</h5>;
 
     case "paragraph":
       return <div key={key} className="text-[#D1D5DB] leading-relaxed">{renderInline(block.text)}</div>;
 
     case "bullet":
-      return <div key={key} className="flex items-start gap-2 pl-2"><span className="text-emerald-400 mt-1 shrink-0">•</span><span className="text-[#D1D5DB]">{renderInline(block.text)}</span></div>;
+      return <div key={key} className="flex items-start gap-2 pl-2"><span className="text-emerald-400 mt-0.5 shrink-0">•</span><span className="text-[#D1D5DB]">{renderInline(block.text)}</span></div>;
 
     case "numbered":
       return <div key={key} className="flex items-start gap-2 pl-2"><span className="text-emerald-400 font-mono text-xs mt-0.5 shrink-0 w-5 text-right">{block.num}.</span><span className="text-[#D1D5DB]">{renderInline(block.text)}</span></div>;

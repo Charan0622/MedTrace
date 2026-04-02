@@ -496,40 +496,43 @@ export function generatePatientPdf(data: PatientPdfData) {
 
       lineIdx++;
 
-      if (cl.startsWith("## ")) {
-        // Section header with green background bar
-        const headerText = cl.slice(3);
-        const headerLines = doc.splitTextToSize(headerText, pw - 28 - 6) as string[];
-        const headerHeight = headerLines.length * LH + 4;
-        if (y + headerHeight > ph - 30) { newPage(); }
-        y += 3;
-        doc.setFillColor(240, 253, 244);
-        doc.rect(M, y - 3, pw - 2 * M, headerHeight + 2, "F");
-        doc.setFillColor(...BRAND.primary);
-        doc.rect(M, y - 3, 3, headerHeight + 2, "F");
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(...BRAND.primary);
-        doc.setFontSize(10.5);
-        doc.text(headerText, M + 5, y + 2);
-        y += headerHeight + 4;
+      // Detect heading level (handles #, ##, ###, ####, #####, and "##### ### text" patterns)
+      const headingMatch = cl.match(/^(#{1,6})\s+(?:#{1,6}\s+)*(.*)/);
+      if (headingMatch && headingMatch[2].replace(/^#+\s*/, "").trim()) {
+        const level = Math.min(headingMatch[1].length, 4);
+        const headerText = headingMatch[2].replace(/^#+\s*/, "").trim();
+
+        if (level <= 2) {
+          // ## level: green background bar
+          const headerLines = doc.splitTextToSize(headerText, pw - 28 - 6) as string[];
+          const headerHeight = headerLines.length * LH + 4;
+          if (y + headerHeight > ph - 30) { newPage(); }
+          y += 3;
+          doc.setFillColor(240, 253, 244);
+          doc.rect(M, y - 3, pw - 2 * M, headerHeight + 2, "F");
+          doc.setFillColor(...BRAND.primary);
+          doc.rect(M, y - 3, 3, headerHeight + 2, "F");
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(...BRAND.primary);
+          doc.setFontSize(level === 1 ? 11 : 10.5);
+          doc.text(headerText, M + 5, y + 2);
+          y += headerHeight + 4;
+        } else {
+          // ### and ####+ level: bold text
+          if (y > ph - 25) { newPage(); }
+          y += 2;
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(level === 3 ? BRAND.primary[0] : TEXT.heading[0], level === 3 ? BRAND.primary[1] : TEXT.heading[1], level === 3 ? BRAND.primary[2] : TEXT.heading[2]);
+          doc.setFontSize(level === 3 ? 9.5 : 9);
+          doc.text(headerText, M + 2, y);
+          y += 5.5;
+        }
         doc.setFontSize(9);
         doc.setTextColor(...TEXT.body);
         doc.setFont("helvetica", "normal");
 
-      } else if (cl.startsWith("### ")) {
-        if (y > ph - 25) { newPage(); }
-        y += 2;
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(...TEXT.heading);
-        doc.setFontSize(9.5);
-        doc.text(cl.slice(4), M + 2, y);
-        y += 5.5;
-        doc.setFontSize(9);
-        doc.setTextColor(...TEXT.body);
-        doc.setFont("helvetica", "normal");
-
-      } else if (cl.startsWith("- ") || cl.startsWith("* ")) {
-        const txt = cl.slice(2);
+      } else if (/^[-*•·]\s+/.test(cl)) {
+        const txt = cl.replace(/^[-*•·]\s+/, "");
         const plainTxt = txt.replace(/\*\*/g, "");
         const wrapped = doc.splitTextToSize(plainTxt, TW) as string[];
         if (y + wrapped.length * LH > ph - 20) { newPage(); }

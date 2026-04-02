@@ -268,44 +268,37 @@ export function generateHandoffPdf(data: HandoffPdfData) {
     for (const line of data.report.split("\n")) {
       const cl = stripEmoji(line);
 
-      if (cl.startsWith("## ")) {
-        checkBreak(16);
-        y += 4;
-        doc.setDrawColor(...BRAND.primary);
-        doc.setLineWidth(0.5);
-        doc.line(M, y + 5, pw - M, y + 5);
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(...BRAND.primary);
-        doc.setFontSize(10);
-        doc.text(cl.slice(3), M, y + 2);
-        y += 11;
+      // Detect heading level (handles #, ##, ###, ####, #####, and "##### ### text" patterns)
+      const headingMatch = cl.match(/^(#{1,6})\s+(?:#{1,6}\s+)*(.*)/);
+      if (headingMatch && headingMatch[2].replace(/^#+\s*/, "").trim()) {
+        const level = Math.min(headingMatch[1].length, 4);
+        const headerText = headingMatch[2].replace(/^#+\s*/, "").trim();
+
+        if (level <= 2) {
+          checkBreak(16);
+          y += 4;
+          doc.setDrawColor(...BRAND.primary);
+          doc.setLineWidth(0.5);
+          doc.line(M, y + 5, pw - M, y + 5);
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(...BRAND.primary);
+          doc.setFontSize(level === 1 ? 12 : 10);
+          doc.text(headerText, M, y + 2);
+          y += 11;
+        } else {
+          checkBreak(12);
+          y += 3;
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(level === 3 ? BRAND.primary[0] : TEXT.heading[0], level === 3 ? BRAND.primary[1] : TEXT.heading[1], level === 3 ? BRAND.primary[2] : TEXT.heading[2]);
+          doc.setFontSize(9);
+          doc.text(headerText, M + 2, y);
+          y += 6;
+        }
         doc.setFontSize(8.5);
         doc.setTextColor(...TEXT.body);
         doc.setFont("helvetica", "normal");
-      } else if (cl.startsWith("### ")) {
-        checkBreak(12);
-        y += 3;
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(...TEXT.heading);
-        doc.setFontSize(9);
-        doc.text(cl.slice(4), M + 2, y);
-        y += 6;
-        doc.setFontSize(8.5);
-        doc.setTextColor(...TEXT.body);
-        doc.setFont("helvetica", "normal");
-      } else if (cl.startsWith("# ")) {
-        checkBreak(16);
-        y += 5;
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(...TEXT.heading);
-        doc.setFontSize(12);
-        doc.text(cl.slice(2), M, y);
-        y += 9;
-        doc.setFontSize(8.5);
-        doc.setTextColor(...TEXT.body);
-        doc.setFont("helvetica", "normal");
-      } else if (cl.startsWith("- ") || cl.startsWith("* ")) {
-        const txt = cl.slice(2).replace(/\*\*/g, "");
+      } else if (/^[-*•·]\s+/.test(cl)) {
+        const txt = cl.replace(/^[-*•·]\s+/, "").replace(/\*\*/g, "");
         const lines = doc.splitTextToSize(txt, TW - 10) as string[];
         const blockHeight = lines.length * LH + 3;
         checkBreak(blockHeight);
