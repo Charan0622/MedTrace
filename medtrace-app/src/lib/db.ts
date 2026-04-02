@@ -7,7 +7,9 @@ import Database from "better-sqlite3";
 import path from "path";
 import { logger } from "./logger";
 
-const DB_PATH = path.join(process.cwd(), "medtrace.db");
+const DB_PATH = process.env.NODE_ENV === "production"
+  ? path.join("/tmp", "medtrace.db")
+  : path.join(process.cwd(), "medtrace.db");
 
 let _db: Database.Database | null = null;
 
