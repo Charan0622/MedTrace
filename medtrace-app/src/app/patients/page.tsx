@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Search, Heart, Activity, Wind, Droplets, Thermometer, Brain,
   Stethoscope, Phone, ChevronRight, BedDouble, Pill,
@@ -37,6 +37,15 @@ function vitalStatus(vital: string, value: number | null): "normal" | "warning" 
 const vitalColor = { normal: "text-emerald-400", warning: "text-amber-400", critical: "text-red-400" };
 const vitalDot = { normal: "vital-normal", warning: "vital-warning", critical: "vital-critical" };
 
+const vitalNormalRange: Record<string, string> = {
+  hr: "Normal: 60–100 bpm",
+  bp: "Normal: 90/60–140/90 mmHg",
+  spo2: "Normal: 95–100%",
+  sugar: "Normal: 70–200 mg/dL",
+  temp: "Normal: 96.8–100.4 °F",
+  pain: "Normal: 0–4 / 10",
+};
+
 export default function PatientsPage() {
   const [patients, setPatients] = useState<PatientListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,12 +77,19 @@ export default function PatientsPage() {
         className="max-w-md"
       />
 
+      {search && (
+        <p className="text-xs text-[#6B7280]">
+          {filtered.length} patient{filtered.length !== 1 ? "s" : ""} found
+        </p>
+      )}
+
       {loading ? (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-56 w-full rounded-2xl" />)}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <AnimatePresence mode="popLayout">
           {filtered.map((patient, i) => {
             const v = patient.latest_vitals;
             const riskLevel: RiskLevel = patient.alert_count >= 3 ? "critical" : patient.alert_count >= 2 ? "high" : patient.alert_count >= 1 ? "moderate" : "safe";
@@ -85,11 +101,11 @@ export default function PatientsPage() {
             );
 
             return (
-              <motion.div key={patient.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
+              <motion.div key={patient.id} layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ delay: i * 0.04 }}>
                 <Link href={`/patients/${patient.id}`}>
                   <Card
                     variant="glass"
-                    className={`glass-hover cursor-pointer transition-all duration-300 hover:shadow-lg ${hasCriticalVital ? "border-red-500/20 glow-red" : isICU ? "border-amber-500/10" : ""}`}
+                    className={`glass-hover card-hover-lift cursor-pointer transition-all duration-300 hover:shadow-lg ${hasCriticalVital ? "border-gradient-critical glow-red" : isICU ? "border-amber-500/10" : ""}`}
                   >
                     {/* Top: Room + Name + Doctor */}
                     <div className="flex items-start justify-between mb-4">
@@ -139,7 +155,8 @@ export default function PatientsPage() {
                         ].map((vital) => {
                           const status = vitalStatus(vital.key, vital.val);
                           return (
-                            <div key={vital.key} className="rounded-xl bg-white/[0.02] p-2 text-center">
+                            <div key={vital.key} className="tooltip-trigger rounded-xl bg-white/[0.02] p-2 text-center">
+                              <span className="tooltip-content">{vitalNormalRange[vital.key]}</span>
                               <div className="flex items-center justify-center gap-1 mb-0.5">
                                 <div className={`vital-dot ${vitalDot[status]}`} />
                               </div>
@@ -185,13 +202,16 @@ export default function PatientsPage() {
               </motion.div>
             );
           })}
+          </AnimatePresence>
         </div>
       )}
 
       {!loading && filtered.length === 0 && (
-        <Card>
-          <p className="text-center text-[#6B7280] py-8">No patients found</p>
-        </Card>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <Card>
+            <p className="text-center text-[#6B7280] py-8">No patients found</p>
+          </Card>
+        </motion.div>
       )}
     </div>
   );

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import {
   LayoutDashboard, Users, Pill, AlertTriangle, ClipboardList,
   Activity, LogOut, FileText, UserPlus, Stethoscope, ChevronRight, BarChart3,
@@ -37,13 +38,13 @@ export function Sidebar() {
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-full w-[260px] flex-col bg-[#0C0F0E] border-r border-white/[0.04]">
       {/* Logo */}
-      <div className="flex h-[72px] items-center gap-3 px-6">
+      <Link href="/" className="flex h-[72px] items-center gap-3 px-6 hover:opacity-90 transition-opacity">
         <Logo size={38} className="shadow-lg glow-brand shrink-0" />
         <div>
           <span className="text-base font-bold text-[#F0FDF4] tracking-tight">MedTrace</span>
           <p className="text-[10px] text-[#6B7280] font-medium tracking-wider uppercase">Nursing Station</p>
         </div>
-      </div>
+      </Link>
 
       {/* User */}
       <div className="mx-4 mb-4 rounded-xl bg-white/[0.03] p-3">
@@ -65,7 +66,7 @@ export function Sidebar() {
               </div>
             </div>
           </div>
-          <button onClick={handleLogout} className="text-[#6B7280] hover:text-[#D1D5DB] p-1.5 rounded-lg hover:bg-white/[0.04] transition-all" title="Logout">
+          <button onClick={handleLogout} className="btn-press text-[#6B7280] hover:text-[#D1D5DB] p-1.5 rounded-lg hover:bg-white/[0.04] transition-all" title="Logout">
             <LogOut className="h-4 w-4" />
           </button>
         </div>
@@ -73,25 +74,39 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.map((item, index) => {
           const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           return (
-            <Link
+            <motion.div
               key={item.href}
-              href={item.href}
-              className={cn(
-                "group flex items-center justify-between rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200",
-                isActive
-                  ? "bg-[#1B6B3A]/15 text-[#4ADE80]"
-                  : "text-[#6B7280] hover:bg-white/[0.03] hover:text-[#D1D5DB]"
-              )}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: index * 0.03 }}
             >
-              <div className="flex items-center gap-3">
-                <item.icon className={cn("h-[18px] w-[18px]", isActive && "text-[#22C55E]")} />
-                {item.label}
-              </div>
-              {isActive && <ChevronRight className="h-3.5 w-3.5 text-[#22C55E]/50" />}
-            </Link>
+              <Link
+                href={item.href}
+                className={cn(
+                  "nav-item-hover group flex items-center justify-between rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200",
+                  isActive
+                    ? "bg-[#1B6B3A]/15 text-[#4ADE80]"
+                    : "text-[#6B7280] hover:bg-white/[0.03] hover:text-[#D1D5DB]"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <item.icon className={cn("h-[18px] w-[18px]", isActive && "text-[#22C55E]")} />
+                  {item.label}
+                </div>
+                {isActive && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -5 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <ChevronRight className="h-3.5 w-3.5 text-[#22C55E]/50" />
+                  </motion.div>
+                )}
+              </Link>
+            </motion.div>
           );
         })}
       </nav>

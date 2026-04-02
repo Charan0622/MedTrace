@@ -38,6 +38,35 @@ const vitalColor = { normal: "text-emerald-400", warning: "text-amber-400", crit
 function acuityColor(score: number): string { return score > 60 ? "#EF4444" : score > 35 ? "#F59E0B" : "#22C55E"; }
 const vitalDot = { normal: "vital-normal", warning: "vital-warning", critical: "vital-critical" };
 
+const vitalTooltips: Record<string, string> = {
+  hr: "Heart Rate: Normal 60-100 bpm",
+  bp: "Blood Pressure: Normal <140/90 mmHg",
+  spo2: "Oxygen Saturation: Normal 95-100%",
+  sugar: "Blood Sugar: Normal 70-140 mg/dL",
+  temp: "Temperature: Normal 97-99\u00B0F",
+  pain: "Pain Level: 0 = none, 10 = worst",
+};
+
+function AnimatedCounter({ value, suffix = "" }: { value: number | string; suffix?: string }) {
+  const [display, setDisplay] = useState(0);
+  const numValue = typeof value === "string" ? parseInt(value) || 0 : value;
+  useEffect(() => {
+    let start = 0;
+    const duration = 800;
+    const startTime = Date.now();
+    const timer = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      start = Math.round(numValue * eased);
+      setDisplay(start);
+      if (progress >= 1) clearInterval(timer);
+    }, 16);
+    return () => clearInterval(timer);
+  }, [numValue]);
+  return <>{display}{suffix}</>;
+}
+
 export default function NursingStationPage() {
   const [patients, setPatients] = useState<NursingPatient[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,7 +122,7 @@ export default function NursingStationPage() {
               </div>
               <div>
                 {loading ? <Skeleton className="h-7 w-10" /> : (
-                  <p className="text-2xl font-bold text-[#F0FDF4] tabular-nums">{stat.value}</p>
+                  <p className="text-2xl font-bold text-[#F0FDF4] tabular-nums"><AnimatedCounter value={stat.value} /></p>
                 )}
                 <p className="text-xs text-[#6B7280] font-medium">{stat.label}</p>
               </div>
@@ -123,7 +152,7 @@ export default function NursingStationPage() {
                 <div className="grid grid-cols-3 gap-2 md:grid-cols-5">
                   {floorRooms.map((room: { id: string; room_number: string; room_type: string; status: string; patient: { id?: string; name: string; acuity: number } | null }) => {
                     const roomCard = (
-                      <Card key={room.id} variant="glass" className={`py-3 px-4 relative overflow-hidden ${room.status === "maintenance" ? "opacity-30" : ""} ${room.patient ? "glass-hover cursor-pointer" : ""}`}>
+                      <Card key={room.id} variant="glass" className={`py-3 px-4 relative overflow-hidden ${room.status === "maintenance" ? "opacity-30" : ""} ${room.patient ? "glass-hover card-hover-lift cursor-pointer" : ""}`}>
                         {room.patient && <div className="absolute top-0 left-0 w-full h-0.5" style={{ backgroundColor: acuityColor(room.patient.acuity) }} />}
                         <div className="flex items-center justify-between">
                           <p className="text-sm font-bold font-mono text-[#F0FDF4]">{room.room_number}</p>
@@ -176,7 +205,7 @@ export default function NursingStationPage() {
                 <Link href={`/patients/${patient.id}`}>
                   <Card
                     variant="glass"
-                    className={`glass-hover cursor-pointer transition-all duration-300 hover:shadow-lg ${hasCriticalVital ? "border-red-500/20 glow-red" : isICU ? "border-amber-500/10" : ""}`}
+                    className={`glass-hover card-hover-lift cursor-pointer transition-all duration-300 hover:shadow-lg ${hasCriticalVital ? "border-gradient-critical glow-red" : isICU ? "border-amber-500/10" : ""}`}
                   >
                     {/* Top: Room + Name + Doctor */}
                     <div className="flex items-start justify-between mb-4">
@@ -226,7 +255,8 @@ export default function NursingStationPage() {
                         ].map((vital) => {
                           const status = vitalStatus(vital.key, vital.val);
                           return (
-                            <div key={vital.key} className="rounded-xl bg-white/[0.02] p-2 text-center">
+                            <div key={vital.key} className="tooltip-trigger rounded-xl bg-white/[0.02] p-2 text-center">
+                              <span className="tooltip-content">{vitalTooltips[vital.key]}</span>
                               <div className="flex items-center justify-center gap-1 mb-0.5">
                                 <div className={`vital-dot ${vitalDot[status]}`} />
                               </div>

@@ -75,6 +75,25 @@ function PieTooltip({ active, payload }: any) {
 
 function acuityColor(score: number): string { return score > 60 ? "#EF4444" : score > 35 ? "#F59E0B" : "#22C55E"; }
 
+function AnimatedCounter({ value }: { value: number | string }) {
+  const [display, setDisplay] = useState(0);
+  const numValue = typeof value === "string" ? parseInt(value) || 0 : value;
+  useEffect(() => {
+    const duration = 800;
+    const startTime = Date.now();
+    const timer = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(numValue * eased));
+      if (progress >= 1) clearInterval(timer);
+    }, 16);
+    return () => clearInterval(timer);
+  }, [numValue]);
+  const suffix = typeof value === "string" && value.includes("%") ? "%" : "";
+  return <>{display}{suffix}</>;
+}
+
 export default function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -127,11 +146,11 @@ export default function AnalyticsPage() {
           { label: "Pending", value: stats.pendingInstructions, icon: BedDouble, color: "from-violet-500/15 to-violet-600/5", text: "text-violet-400", border: "border-violet-500/10" },
         ].map((s, i) => (
           <motion.div key={s.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
-            <Card variant="glass" className={`text-center py-4 ${s.border}`}>
+            <Card variant="glass" className={`text-center py-4 border ${s.border} card-hover-lift`}>
               <div className={`rounded-xl bg-gradient-to-br ${s.color} p-2 w-fit mx-auto mb-2`}>
                 <s.icon className={`h-4 w-4 ${s.text}`} />
               </div>
-              <p className="text-xl font-bold text-[#F0FDF4] tabular-nums">{s.value}</p>
+              <p className="text-xl font-bold text-[#F0FDF4] tabular-nums"><AnimatedCounter value={s.value} /></p>
               <p className="text-[9px] text-[#6B7280] uppercase tracking-wider mt-0.5">{s.label}</p>
             </Card>
           </motion.div>
@@ -141,7 +160,7 @@ export default function AnalyticsPage() {
       {/* Row 1: Drug Usage Bar + Conditions Donut */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-          <Card>
+          <Card className="card-hover-lift">
             <CardTitle>Most Prescribed Medications</CardTitle>
             <p className="text-[11px] text-[#6B7280] mt-1 mb-4">Active prescriptions across all admitted patients</p>
             <ResponsiveContainer width="100%" height={300}>
@@ -163,7 +182,7 @@ export default function AnalyticsPage() {
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-          <Card>
+          <Card className="card-hover-lift">
             <CardTitle>Patient Conditions</CardTitle>
             <p className="text-[11px] text-[#6B7280] mt-1 mb-4">Distribution of diagnosed conditions across the ward</p>
             <ResponsiveContainer width="100%" height={300}>
@@ -198,7 +217,7 @@ export default function AnalyticsPage() {
       {/* Row 2: Drug Classes + Patient Acuity Radars */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-          <Card>
+          <Card className="card-hover-lift">
             <CardTitle>Drug Classes in Use</CardTitle>
             <p className="text-[11px] text-[#6B7280] mt-1 mb-4">Pharmacological categories of active medications</p>
             <ResponsiveContainer width="100%" height={280}>
@@ -218,7 +237,7 @@ export default function AnalyticsPage() {
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
-          <Card>
+          <Card className="card-hover-lift">
             <CardTitle>Clinical Alerts by Priority</CardTitle>
             <p className="text-[11px] text-[#6B7280] mt-1 mb-4">Outstanding doctor instructions requiring action</p>
             <div className="space-y-5 mt-4">
@@ -237,7 +256,7 @@ export default function AnalyticsPage() {
                     </div>
                     <div className="bg-white/[0.03] rounded-full h-3 overflow-hidden">
                       <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 1.2, ease: "easeOut" }}
-                        className="h-full rounded-full" style={{ background: `linear-gradient(90deg, ${color}60, ${color})` }} />
+                        className="h-full rounded-full shadow-sm" style={{ background: `linear-gradient(90deg, ${color}60, ${color})`, boxShadow: `0 0 8px ${color}30` }} />
                     </div>
                   </div>
                 );
@@ -276,7 +295,7 @@ export default function AnalyticsPage() {
       {/* Row 3: Medication Administration Area Chart */}
       {medTimeline.length > 1 && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
-          <Card>
+          <Card className="card-hover-lift">
             <CardTitle>Medication Administration Timeline</CardTitle>
             <p className="text-[11px] text-[#6B7280] mt-1 mb-4">Administration activity over time — green = given, amber = held, red = skipped</p>
             <ResponsiveContainer width="100%" height={220}>
@@ -305,7 +324,7 @@ export default function AnalyticsPage() {
 
       {/* Row 4: Drug Interaction Network */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}>
-        <Card>
+        <Card className="card-hover-lift">
           <CardTitle>Active Drug Interaction Network</CardTitle>
           <p className="text-[11px] text-[#6B7280] mt-1 mb-4">Known drug-drug interactions among current prescriptions — severity: green (low), amber (moderate), red (critical)</p>
           <div className="space-y-2">
@@ -313,7 +332,7 @@ export default function AnalyticsPage() {
               const color = int.severity > 7 ? "#EF4444" : int.severity > 4 ? "#F59E0B" : "#22C55E";
               return (
                 <motion.div key={i} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.9 + i * 0.03 }}
-                  className="flex items-center gap-3 rounded-xl bg-white/[0.02] border border-white/[0.04] p-3 hover:bg-white/[0.04] transition-colors">
+                  className="flex items-center gap-3 rounded-xl bg-white/[0.02] border border-white/[0.04] p-3 hover:bg-white/[0.04] hover:scale-[1.01] transition-transform transition-colors">
                   <p className="text-sm font-mono font-semibold text-[#F0FDF4] flex-1 text-right">{int.drug_a}</p>
                   <div className="w-28 flex flex-col items-center gap-1">
                     <div className="w-full h-2.5 bg-white/[0.03] rounded-full overflow-hidden">
@@ -333,7 +352,7 @@ export default function AnalyticsPage() {
 
       {/* Row 5: Med Admin Log */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }}>
-        <Card>
+        <Card className="card-hover-lift">
           <CardTitle>Medication Administration Log</CardTitle>
           <p className="text-[11px] text-[#6B7280] mt-1 mb-4">Individual administration records with status indicators</p>
           <div className="space-y-1">
@@ -342,7 +361,7 @@ export default function AnalyticsPage() {
               const statusColor = ma.status === "given" ? "#22C55E" : ma.status === "held" ? "#F59E0B" : "#EF4444";
               return (
                 <motion.div key={i} initial={{ opacity: 0, x: -15 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 1.0 + i * 0.02 }}
-                  className="flex items-center gap-3 py-1.5 hover:bg-white/[0.02] rounded-lg px-2 transition-colors">
+                  className="flex items-center gap-3 py-1.5 hover:bg-white/[0.03] rounded-lg px-2 transition-colors">
                   <span className="text-[10px] font-mono text-[#6B7280] w-12 shrink-0">{time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                   <div className="h-5 flex-1 bg-white/[0.02] rounded-md overflow-hidden flex items-center" style={{ borderLeft: `3px solid ${statusColor}` }}>
                     <span className="text-[11px] text-[#D1D5DB] px-2.5 truncate">{ma.drug_name as string} {ma.dose_given as string} — {ma.patient_name as string}</span>
