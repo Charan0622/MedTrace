@@ -64,7 +64,7 @@ export async function GET() {
     const patientInRoom = acuityData.find((p) => p.room === r.room_number);
     return {
       ...r,
-      patient: patientInRoom ? { name: patientInRoom.name, acuity: patientInRoom.acuity.overall } : null,
+      patient: patientInRoom ? { id: patientInRoom.id, name: patientInRoom.name, acuity: patientInRoom.acuity.overall } : null,
     };
   });
 

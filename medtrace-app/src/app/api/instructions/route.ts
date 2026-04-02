@@ -24,6 +24,8 @@ export async function PATCH(request: Request) {
 
   if (status === "completed") {
     db.prepare("UPDATE doctor_instructions SET status = ?, completed_at = datetime('now'), completed_by = ? WHERE id = ?").run(status, completed_by ?? null, id);
+  } else if (status === "pending") {
+    db.prepare("UPDATE doctor_instructions SET status = 'pending', completed_at = NULL, completed_by = NULL WHERE id = ?").run(id);
   } else {
     db.prepare("UPDATE doctor_instructions SET status = ? WHERE id = ?").run(status, id);
   }

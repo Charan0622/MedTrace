@@ -11,7 +11,7 @@ export async function GET() {
     data: {
       status: "healthy",
       database: `SQLite — ${patientCount} patients, ${drugCount} drugs`,
-      ai_engine: "User-provided at login (NVIDIA/Gemini)",
+      ai_engine: "NVIDIA NIM (Llama 3.1 8B + Nemotron Super 49B)",
       timestamp: new Date().toISOString(),
     },
     error: null,

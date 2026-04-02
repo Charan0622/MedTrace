@@ -7,11 +7,12 @@ import {
   ArrowLeft, Pill, Heart, Stethoscope, Phone, BedDouble,
   ClipboardList, Activity, AlertTriangle, Brain, Clock,
   Droplets, Thermometer, Wind, FileText, Dna, FlaskConical,
-  MessageSquare, Send, TriangleAlert, Download, Loader2, HeartPulse, Home, Info,
+  MessageSquare, Send, TriangleAlert, Download, Loader2, HeartPulse, Home, Info, Undo2, Zap,
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from "recharts";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -47,7 +48,9 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
   const [aiAnalysis, setAiAnalysis] = useState<{ summary: string; anomalies: string[]; recommendations: string[]; ai_model: string } | null>(null);
   const [analyzingVitals, setAnalyzingVitals] = useState(false);
   const [carePlan, setCarePlan] = useState<{ plan: string; ai_model: string; plan_type: string } | null>(null);
+  const [fastPlan, setFastPlan] = useState<{ plan: string; ai_model: string; plan_type: string } | null>(null);
   const [generatingPlan, setGeneratingPlan] = useState(false);
+  const [detailedLoading, setDetailedLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "vitals" | "notes" | "labs" | "timeline" | "careplan">("overview");
   const [drugInfoDrug, setDrugInfoDrug] = useState<string | null>(null);
 
@@ -88,17 +91,50 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
   }
 
   async function generateCarePlan(planType: "current" | "discharge") {
+    const headers = aiHeaders();
+    const hasAiKey = !!headers["x-ai-key"];
+
     setGeneratingPlan(true);
     setCarePlan(null);
-    try {
-      const r = await fetch("/api/ai/care-plan", {
-        method: "POST", headers: aiHeaders(),
-        body: JSON.stringify({ patient_id: id, plan_type: planType }),
-      });
-      const res = await r.json();
-      if (res.success && res.data) setCarePlan(res.data);
-    } catch { /* ignore */ }
-    setGeneratingPlan(false);
+    setFastPlan(null);
+    setDetailedLoading(false);
+
+    if (!hasAiKey) {
+      // No AI key — rule-based only
+      try {
+        const r = await fetch("/api/ai/care-plan", { method: "POST", headers, body: JSON.stringify({ patient_id: id, plan_type: planType }) });
+        const res = await r.json();
+        if (res.success && res.data) setCarePlan(res.data);
+      } catch { /* ignore */ }
+      setGeneratingPlan(false);
+      return;
+    }
+
+    // Dual-model: fire fast + detailed in parallel
+    setDetailedLoading(true);
+
+    // Fast model — returns in ~3-5 seconds
+    fetch("/api/ai/care-plan/dual", {
+      method: "POST", headers,
+      body: JSON.stringify({ patient_id: id, plan_type: planType, phase: "fast" }),
+    }).then((r) => r.json()).then((res) => {
+      if (res.success && res.data) {
+        setFastPlan(res.data);
+        setGeneratingPlan(false); // Stop the loading spinner
+      }
+    }).catch(() => { setGeneratingPlan(false); });
+
+    // Detailed model — runs in background, takes longer
+    fetch("/api/ai/care-plan/dual", {
+      method: "POST", headers,
+      body: JSON.stringify({ patient_id: id, plan_type: planType, phase: "detailed" }),
+    }).then((r) => r.json()).then((res) => {
+      if (res.success && res.data) {
+        setCarePlan(res.data);
+        setFastPlan(null); // Clear fast plan once detailed is ready
+      }
+      setDetailedLoading(false);
+    }).catch(() => { setDetailedLoading(false); });
   }
 
   async function runVitalsAnalysis() {
@@ -120,6 +156,14 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
       body: JSON.stringify({ id: insId, status: "completed", completed_by: user?.name }),
     });
     setInstructions((prev) => prev.map((i) => i.id === insId ? { ...i, status: "completed", completed_by: user?.name, completed_at: new Date().toISOString() } : i));
+  }
+
+  async function undoInstruction(insId: string) {
+    await apiClient("/api/instructions", {
+      method: "PATCH",
+      body: JSON.stringify({ id: insId, status: "pending" }),
+    });
+    setInstructions((prev) => prev.map((i) => i.id === insId ? { ...i, status: "pending", completed_by: null, completed_at: null } : i));
   }
 
   if (loading) return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-48 w-full" /><div className="grid grid-cols-2 gap-4"><Skeleton className="h-48" /><Skeleton className="h-48" /></div></div>;
@@ -244,6 +288,7 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
                     <div className="flex items-center gap-2">
                       <Badge className={ins.status === "completed" ? "bg-green-500/10 text-green-400 border-green-500/30" : "bg-blue-500/10 text-blue-400 border-blue-500/30"}>{ins.status as string}</Badge>
                       {ins.status !== "completed" && user?.role === "nurse" && <button onClick={() => completeInstruction(ins.id as string)} className="text-xs text-green-400 hover:underline">Done</button>}
+                      {ins.status === "completed" && user?.role === "nurse" && <button onClick={() => undoInstruction(ins.id as string)} className="text-xs text-yellow-400 hover:underline flex items-center gap-1"><Undo2 className="h-3 w-3" />Undo</button>}
                     </div>
                   </div>
                   <p className={`text-sm ${ins.status === "completed" ? "text-[#6B7280] line-through" : "text-[#D1D5DB]"}`}>{ins.instruction as string}</p>
@@ -253,8 +298,50 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
             </div>
           </Card>
 
-          {/* Pharmacogenomics + Allergies sidebar */}
+          {/* Acuity Radar + Pharmacogenomics sidebar */}
           <div className="space-y-5">
+            {/* Patient Acuity Radar */}
+            {(() => {
+              const hr = Number(v?.heart_rate) || 75;
+              const sys = Number(v?.blood_pressure_sys) || 120;
+              const spo2Val = Number(v?.spo2) || 98;
+              const sugar = Number(v?.blood_sugar) || 100;
+              const pain = Number(v?.pain_level) || 0;
+              const interactionCount = patient.medications?.length ? Math.max(0, patient.medications.length - 2) : 0;
+
+              const heartScore = Math.min(100, Math.abs(hr - 75) * 2 + (hr > 100 ? 30 : 0) + (hr < 60 ? 30 : 0));
+              const bpScore = Math.min(100, Math.abs(sys - 120) * 1.5 + (sys > 160 ? 40 : 0) + (sys < 90 ? 40 : 0));
+              const oxygenScore = Math.min(100, (100 - spo2Val) * 10);
+              const glucoseScore = Math.min(100, Math.abs(sugar - 100) * 0.5 + (sugar > 200 ? 30 : 0) + (sugar < 70 ? 40 : 0));
+              const painScore = pain * 10;
+              const interactionScore = Math.min(100, interactionCount * 20);
+              const overall = Math.round((heartScore + bpScore + oxygenScore + glucoseScore + painScore + interactionScore) / 6);
+              const color = overall > 60 ? "#EF4444" : overall > 35 ? "#F59E0B" : "#22C55E";
+
+              const radarData = [
+                { s: "Heart", v: heartScore }, { s: "BP", v: bpScore }, { s: "O₂", v: oxygenScore },
+                { s: "Sugar", v: glucoseScore }, { s: "Pain", v: painScore }, { s: "Drugs", v: interactionScore },
+              ];
+
+              return (
+                <Card>
+                  <div className="flex items-center justify-between mb-2">
+                    <CardTitle>Acuity Radar</CardTitle>
+                    <span className="text-lg font-bold font-mono" style={{ color }}>{overall}%</span>
+                  </div>
+                  <p className="text-[10px] text-[#6B7280] mb-2">Risk across 6 clinical dimensions. Larger shape = higher acuity.</p>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <RadarChart data={radarData}>
+                      <PolarGrid stroke="rgba(255,255,255,0.06)" />
+                      <PolarAngleAxis dataKey="s" tick={{ fontSize: 10, fill: "#6B7280" }} />
+                      <PolarRadiusAxis tick={false} domain={[0, 100]} />
+                      <Radar dataKey="v" stroke={color} fill={color} fillOpacity={0.15} strokeWidth={2} />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </Card>
+              );
+            })()}
+
             {patient.genotypes && patient.genotypes.length > 0 && (
               <Card className="border-emerald-500/20">
                 <div className="flex items-center gap-2 mb-3"><Dna className="h-5 w-5 text-emerald-400" /><CardTitle>Pharmacogenomics</CardTitle></div>
@@ -286,9 +373,9 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
           {aiAnalysis && (
             <Card className="border-l-4 border-l-emerald-500">
               <div className="flex items-center gap-2 mb-2"><Brain className="h-4 w-4 text-emerald-400" /><span className="text-sm font-semibold text-[#D1D5DB]">AI Analysis</span><Badge>{aiAnalysis.ai_model}</Badge></div>
-              <p className="text-sm text-[#D1D5DB] mb-2">{aiAnalysis.summary}</p>
-              {aiAnalysis.anomalies.length > 0 && <div className="mb-2">{aiAnalysis.anomalies.map((a, i) => <p key={i} className="text-sm text-red-400 flex items-center gap-1"><AlertTriangle className="h-3 w-3" />{a}</p>)}</div>}
-              {aiAnalysis.recommendations.length > 0 && <div>{aiAnalysis.recommendations.map((r, i) => <p key={i} className="text-sm text-green-400">• {r}</p>)}</div>}
+              <div className="text-sm text-[#D1D5DB] mb-2">{aiAnalysis.summary}</div>
+              {aiAnalysis.anomalies.length > 0 && <div className="mb-2">{aiAnalysis.anomalies.map((a, i) => <div key={i} className="text-sm text-red-400 flex items-center gap-1"><AlertTriangle className="h-3 w-3" />{a}</div>)}</div>}
+              {aiAnalysis.recommendations.length > 0 && <div>{aiAnalysis.recommendations.map((r, i) => <div key={i} className="text-sm text-green-400">• {r}</div>)}</div>}
             </Card>
           )}
 
@@ -463,12 +550,51 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
             </Button>
           </div>
 
-          {generatingPlan && (
+          {/* Loading spinner — only while waiting for fast model */}
+          {generatingPlan && !fastPlan && (
             <Card variant="glass">
               <AiLoadingTip patientName={patient.name} action="care plan" />
             </Card>
           )}
 
+          {/* Fast model response — quick summary */}
+          {fastPlan && !carePlan && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <Card className="border-sky-500/20">
+                <div className="flex items-center gap-2 mb-3">
+                  <Zap className="h-5 w-5 text-sky-400" />
+                  <CardTitle>Quick Assessment</CardTitle>
+                  <Badge className="bg-sky-500/10 text-sky-400 border-sky-500/20">{fastPlan.ai_model}</Badge>
+                </div>
+                <MarkdownRenderer content={fastPlan.plan} />
+
+                {/* Detailed loading indicator */}
+                {detailedLoading && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-4 pt-4 border-t border-white/[0.06]">
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <Loader2 className="h-5 w-5 text-emerald-400 animate-spin" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-emerald-400 font-medium">Big brother is working on it...</p>
+                        <p className="text-xs text-[#6B7280]">Nemotron Super 49B is generating the comprehensive detailed report. It will replace this summary automatically.</p>
+                      </div>
+                    </div>
+                    {/* Animated progress dots */}
+                    <div className="flex items-center gap-1.5 mt-3 ml-8">
+                      {[0, 1, 2, 3, 4].map((i) => (
+                        <motion.div key={i} className="h-1.5 w-1.5 rounded-full bg-emerald-400"
+                          animate={{ opacity: [0.2, 1, 0.2] }}
+                          transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.3 }} />
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </Card>
+            </motion.div>
+          )}
+
+          {/* Detailed model response — full care plan */}
           {carePlan && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
               <Card>
@@ -476,10 +602,13 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
                   <div className="flex items-center gap-2">
                     {carePlan.plan_type === "discharge" ? <Home className="h-5 w-5 text-emerald-400" /> : <HeartPulse className="h-5 w-5 text-sky-400" />}
                     <CardTitle>{carePlan.plan_type === "discharge" ? "Discharge Care Plan" : "Current Care Plan"}</CardTitle>
-                    <Badge className={carePlan.ai_model !== "rule-based" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : ""}>{carePlan.ai_model === "nvidia" ? "NVIDIA Nemotron" : carePlan.ai_model}</Badge>
+                    <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">{carePlan.ai_model}</Badge>
                   </div>
-                  <Button variant="secondary" size="sm" onClick={() => window.print()}>
-                    <Download className="h-4 w-4" /> Print
+                  <Button variant="secondary" size="sm" onClick={() => {
+                    generatePatientPdf({ patient: patient as unknown as Row, allergies, labs, notes, instructions, medAdmin, carePlan: carePlan.plan });
+                    toast("PDF with care plan downloaded", "success");
+                  }}>
+                    <Download className="h-4 w-4" /> Download PDF
                   </Button>
                 </div>
                 <MarkdownRenderer content={carePlan.plan} />
@@ -487,7 +616,8 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
             </motion.div>
           )}
 
-          {!carePlan && !generatingPlan && (
+          {/* Empty state */}
+          {!carePlan && !fastPlan && !generatingPlan && (
             <Card variant="glass">
               <div className="text-center py-8">
                 <HeartPulse className="h-10 w-10 text-[#6B7280] mx-auto mb-3" />

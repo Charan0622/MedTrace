@@ -66,7 +66,9 @@ function createTables(db: Database.Database) {
       role TEXT NOT NULL CHECK (role IN ('doctor', 'nurse', 'admin')),
       department TEXT,
       employee_id TEXT UNIQUE,
-      email TEXT
+      email TEXT UNIQUE,
+      password TEXT NOT NULL DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS rooms (
@@ -399,14 +401,14 @@ function seedNewData(db: Database.Database) {
 function seedData(db: Database.Database) {
   const tx = db.transaction(() => {
     // Users
-    const insertUser = db.prepare("INSERT INTO users (id, name, role, department, employee_id, email) VALUES (?, ?, ?, ?, ?, ?)");
-    insertUser.run("user-doc-chen", "Dr. Sarah Chen", "doctor", "Cardiology", "DOC-1001", "s.chen@hospital.org");
-    insertUser.run("user-doc-park", "Dr. James Park", "doctor", "Psychiatry", "DOC-1002", "j.park@hospital.org");
-    insertUser.run("user-doc-gupta", "Dr. Priya Gupta", "doctor", "Endocrinology", "DOC-1003", "p.gupta@hospital.org");
-    insertUser.run("user-doc-brown", "Dr. Michael Brown", "doctor", "Internal Medicine", "DOC-1004", "m.brown@hospital.org");
-    insertUser.run("user-nurse-amy", "Amy Rodriguez", "nurse", "General Ward", "NUR-2001", "a.rodriguez@hospital.org");
-    insertUser.run("user-nurse-ben", "Ben Thompson", "nurse", "ICU", "NUR-2002", "b.thompson@hospital.org");
-    insertUser.run("user-nurse-carol", "Carol Singh", "nurse", "General Ward", "NUR-2003", "c.singh@hospital.org");
+    const insertUser = db.prepare("INSERT INTO users (id, name, role, department, employee_id, email, password) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    insertUser.run("user-doc-chen", "Dr. Sarah Chen", "doctor", "Cardiology", "DOC-1001", "s.chen@hospital.org", "medtrace123");
+    insertUser.run("user-doc-park", "Dr. James Park", "doctor", "Psychiatry", "DOC-1002", "j.park@hospital.org", "medtrace123");
+    insertUser.run("user-doc-gupta", "Dr. Priya Gupta", "doctor", "Endocrinology", "DOC-1003", "p.gupta@hospital.org", "medtrace123");
+    insertUser.run("user-doc-brown", "Dr. Michael Brown", "doctor", "Internal Medicine", "DOC-1004", "m.brown@hospital.org", "medtrace123");
+    insertUser.run("user-nurse-amy", "Amy Rodriguez", "nurse", "General Ward", "NUR-2001", "a.rodriguez@hospital.org", "medtrace123");
+    insertUser.run("user-nurse-ben", "Ben Thompson", "nurse", "ICU", "NUR-2002", "b.thompson@hospital.org", "medtrace123");
+    insertUser.run("user-nurse-carol", "Carol Singh", "nurse", "General Ward", "NUR-2003", "c.singh@hospital.org", "medtrace123");
 
     // Rooms
     const insertRoom = db.prepare("INSERT INTO rooms (id, room_number, floor, ward, bed_count, room_type, status) VALUES (?, ?, ?, ?, ?, ?, ?)");

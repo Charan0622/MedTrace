@@ -8,10 +8,7 @@ import {
   Stethoscope, Pill, ChevronRight, Heart,
   Droplets, Thermometer, Wind, Brain, Info,
 } from "lucide-react";
-import {
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer,
-} from "recharts";
-import { Card, CardTitle } from "@/components/ui/Card";
+import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { apiClient } from "@/lib/api";
@@ -104,6 +101,58 @@ export default function NursingStationPage() {
           </motion.div>
         ))}
       </div>
+
+      {/* === Ward Floor Map — Visual Command Center === */}
+      {analytics?.roomData && (
+        <div>
+          <div className="flex items-start gap-3 mb-4">
+            <div>
+              <h2 className="text-lg font-bold text-[#F0FDF4]">Ward Floor Map</h2>
+              <div className="flex items-start gap-1.5 mt-1">
+                <Info className="h-3.5 w-3.5 text-[#6B7280] mt-0.5 shrink-0" />
+                <p className="text-xs text-[#6B7280]">Live room occupancy with patient acuity indicators. Click any occupied room to view the patient. Grey rooms are available for new admissions.</p>
+              </div>
+            </div>
+          </div>
+          {[2, 3].map((floor) => {
+            const floorRooms = analytics.roomData.filter((r: { floor: number }) => r.floor === floor);
+            if (floorRooms.length === 0) return null;
+            return (
+              <div key={floor} className="mb-4">
+                <p className="text-xs font-semibold text-[#6B7280] mb-2 uppercase tracking-wider">Floor {floor} — {floor === 2 ? "ICU" : "General Ward"}</p>
+                <div className="grid grid-cols-3 gap-2 md:grid-cols-5">
+                  {floorRooms.map((room: { id: string; room_number: string; room_type: string; status: string; patient: { id?: string; name: string; acuity: number } | null }) => {
+                    const roomCard = (
+                      <Card key={room.id} variant="glass" className={`py-3 px-4 relative overflow-hidden ${room.status === "maintenance" ? "opacity-30" : ""} ${room.patient ? "glass-hover cursor-pointer" : ""}`}>
+                        {room.patient && <div className="absolute top-0 left-0 w-full h-0.5" style={{ backgroundColor: acuityColor(room.patient.acuity) }} />}
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-bold font-mono text-[#F0FDF4]">{room.room_number}</p>
+                          {room.room_type === "icu" && <span className="text-[8px] font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">ICU</span>}
+                        </div>
+                        {room.patient ? (
+                          <div className="mt-1">
+                            <p className="text-[11px] text-[#D1D5DB] truncate">{room.patient.name}</p>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <div className="vital-dot" style={{ backgroundColor: acuityColor(room.patient.acuity), boxShadow: `0 0 4px ${acuityColor(room.patient.acuity)}60` }} />
+                              <span className="text-[9px] font-mono" style={{ color: acuityColor(room.patient.acuity) }}>{room.patient.acuity}%</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-[#6B7280] mt-1">{room.status === "maintenance" ? "Maintenance" : "Available"}</p>
+                        )}
+                      </Card>
+                    );
+                    if (room.patient?.id) {
+                      return <Link key={room.id} href={`/patients/${room.patient.id}`}>{roomCard}</Link>;
+                    }
+                    return roomCard;
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Patient Grid */}
       {loading ? (
@@ -208,93 +257,6 @@ export default function NursingStationPage() {
                   </Card>
                 </Link>
               </motion.div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* === Patient Acuity Radar Charts === */}
-      {analytics?.acuityData && (
-        <div>
-          <div className="flex items-start gap-3 mb-4">
-            <div>
-              <h2 className="text-lg font-bold text-[#F0FDF4]">Patient Acuity Overview</h2>
-              <div className="flex items-start gap-1.5 mt-1">
-                <Info className="h-3.5 w-3.5 text-[#6B7280] mt-0.5 shrink-0" />
-                <p className="text-xs text-[#6B7280]">Each radar shows a patient&apos;s risk across 6 clinical dimensions. Larger shapes mean higher acuity. Red (&gt;60%) = critical, Amber (35-60%) = moderate, Green (&lt;35%) = stable. Click any chart to view the patient.</p>
-              </div>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            {analytics.acuityData.map((p: { id: string; name: string; room: string; medCount: number; acuity: { heart: number; bp: number; oxygen: number; glucose: number; pain: number; interactions: number; overall: number } }, i: number) => (
-              <motion.div key={p.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }}>
-                <Link href={`/patients/${p.id}`}>
-                  <Card variant="glass" className="glass-hover cursor-pointer py-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-xs font-semibold text-[#D1D5DB] truncate">{p.name}</p>
-                      <span className="text-sm font-bold font-mono" style={{ color: acuityColor(p.acuity.overall) }}>{p.acuity.overall}%</span>
-                    </div>
-                    <p className="text-[9px] text-[#6B7280] mb-1">Room {p.room ?? "—"} &middot; {p.medCount} meds</p>
-                    <ResponsiveContainer width="100%" height={120}>
-                      <RadarChart data={[
-                        { s: "Heart", v: p.acuity.heart }, { s: "BP", v: p.acuity.bp }, { s: "O₂", v: p.acuity.oxygen },
-                        { s: "Sugar", v: p.acuity.glucose }, { s: "Pain", v: p.acuity.pain }, { s: "Drugs", v: p.acuity.interactions },
-                      ]}>
-                        <PolarGrid stroke="rgba(255,255,255,0.05)" />
-                        <PolarAngleAxis dataKey="s" tick={{ fontSize: 8, fill: "#6B7280" }} />
-                        <PolarRadiusAxis tick={false} domain={[0, 100]} />
-                        <Radar dataKey="v" stroke={acuityColor(p.acuity.overall)} fill={acuityColor(p.acuity.overall)} fillOpacity={0.15} strokeWidth={1.5} />
-                      </RadarChart>
-                    </ResponsiveContainer>
-                  </Card>
-                </Link>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* === Ward Floor Map === */}
-      {analytics?.roomData && (
-        <div>
-          <div className="flex items-start gap-3 mb-4">
-            <div>
-              <h2 className="text-lg font-bold text-[#F0FDF4]">Ward Floor Map</h2>
-              <div className="flex items-start gap-1.5 mt-1">
-                <Info className="h-3.5 w-3.5 text-[#6B7280] mt-0.5 shrink-0" />
-                <p className="text-xs text-[#6B7280]">Live room occupancy with patient acuity indicators. The colored bar at the top of each room shows risk level. Grey rooms are available for new admissions.</p>
-              </div>
-            </div>
-          </div>
-          {[2, 3].map((floor) => {
-            const floorRooms = analytics.roomData.filter((r: { floor: number }) => r.floor === floor);
-            if (floorRooms.length === 0) return null;
-            return (
-              <div key={floor} className="mb-4">
-                <p className="text-xs font-semibold text-[#6B7280] mb-2 uppercase tracking-wider">Floor {floor} — {floor === 2 ? "ICU" : "General Ward"}</p>
-                <div className="grid grid-cols-3 gap-2 md:grid-cols-5">
-                  {floorRooms.map((room: { id: string; room_number: string; room_type: string; status: string; patient: { name: string; acuity: number } | null }) => (
-                    <Card key={room.id} variant="glass" className={`py-3 px-4 relative overflow-hidden ${room.status === "maintenance" ? "opacity-30" : ""}`}>
-                      {room.patient && <div className="absolute top-0 left-0 w-full h-0.5" style={{ backgroundColor: acuityColor(room.patient.acuity) }} />}
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-bold font-mono text-[#F0FDF4]">{room.room_number}</p>
-                        {room.room_type === "icu" && <span className="text-[8px] font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">ICU</span>}
-                      </div>
-                      {room.patient ? (
-                        <div className="mt-1">
-                          <p className="text-[11px] text-[#D1D5DB] truncate">{room.patient.name}</p>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <div className="vital-dot" style={{ backgroundColor: acuityColor(room.patient.acuity), boxShadow: `0 0 4px ${acuityColor(room.patient.acuity)}60` }} />
-                            <span className="text-[9px] font-mono" style={{ color: acuityColor(room.patient.acuity) }}>{room.patient.acuity}%</span>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-[10px] text-[#6B7280] mt-1">{room.status === "maintenance" ? "Maintenance" : "Available"}</p>
-                      )}
-                    </Card>
-                  ))}
-                </div>
-              </div>
             );
           })}
         </div>

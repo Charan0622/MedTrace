@@ -2,6 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { logger } from "@/lib/logger";
 
+const TOXIC_TERMS = [
+  "sulfuric acid", "hydrochloric acid", "nitric acid", "phosphoric acid",
+  "bleach", "ammonia", "cyanide", "arsenic", "mercury", "lead", "thallium", "ricin",
+  "methanol", "ethylene glycol", "antifreeze", "rat poison", "pesticide", "insecticide",
+  "formaldehyde", "benzene", "toluene", "acetone", "turpentine", "kerosene", "gasoline",
+  "drain cleaner", "oven cleaner", "paint thinner", "lighter fluid", "battery acid",
+  "strychnine", "hemlock", "nightshade", "aconite", "oleander",
+  "heroin", "cocaine", "methamphetamine", "crack", "meth", "ecstasy", "lsd",
+  "plutonium", "uranium", "asbestos", "sodium hydroxide", "potassium hydroxide",
+  "caustic soda", "lye", "chlorine gas",
+];
+
+function containsToxic(name: string): boolean {
+  const lower = name.toLowerCase();
+  return TOXIC_TERMS.some((t) => lower.includes(t));
+}
+
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
   const q = request.nextUrl.searchParams.get("q")?.trim() ?? "";
@@ -77,17 +94,28 @@ export async function GET(request: NextRequest) {
     }
   } catch (e) { logger.warn("OpenFDA search failed", e instanceof Error ? e.message : ""); }
 
-  // 4. Always allow custom entry so user can prescribe anything
-  if (results.length === 0 && q.length >= 3) {
-    results.push({
+  // 4. Filter out any toxic/non-pharmaceutical substances
+  const safeResults = results.filter((r) => !containsToxic(String(r.name)));
+
+  // 5. Allow custom entry ONLY if query doesn't match toxic substances
+  if (safeResults.length === 0 && q.length >= 3 && !containsToxic(q)) {
+    safeResults.push({
       id: `custom-${Date.now()}`,
       name: q.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" "),
       generic_name: null, drug_class: null, efficacy_score: null, source: "custom",
     });
   }
 
+  // If user searched for a toxic substance, return a warning
+  if (containsToxic(q)) {
+    return NextResponse.json({
+      success: true, data: [], error: null,
+      meta: { query_time_ms: Date.now() - startTime, total: 0, warning: `"${q}" is not a valid medication. Only FDA-approved pharmaceuticals can be prescribed.` },
+    });
+  }
+
   return NextResponse.json({
-    success: true, data: results.slice(0, 20), error: null,
-    meta: { query_time_ms: Date.now() - startTime, total: results.length },
+    success: true, data: safeResults.slice(0, 20), error: null,
+    meta: { query_time_ms: Date.now() - startTime, total: safeResults.length },
   });
 }

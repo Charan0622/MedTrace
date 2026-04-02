@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { getProviderAndKey, generateAiResponse, formatAiError } from "@/lib/ai-client";
 import { getDb } from "@/lib/db";
+import { getCarePlanSystemPrompt } from "@/lib/care-plan-prompts";
 
 type Row = Record<string, unknown>;
 
 export async function POST(request: Request) {
   const startTime = Date.now();
-  const { provider, key } = getProviderAndKey(request);
+  const { key } = getProviderAndKey(request);
   const body = await request.json();
   const { patient_id, plan_type } = body as { patient_id: string; plan_type: "current" | "discharge" };
 
@@ -82,7 +83,7 @@ RECENT NURSE NOTES
 ${notes.map((n) => `[${n.created_at}] ${n.author} (${n.note_type}): ${n.content}`).join("\n") || "No notes"}
 `;
 
-  if (!provider || !key) {
+  if (!key) {
     return NextResponse.json({
       success: true,
       data: { plan: buildRuleBasedPlan(patient, conditions, meds, allergies, vitals, labs, plan_type), ai_model: "rule-based", plan_type },
@@ -91,91 +92,15 @@ ${notes.map((n) => `[${n.created_at}] ${n.author} (${n.note_type}): ${n.content}
   }
 
   try {
-    const systemPrompt = plan_type === "discharge"
-      ? `You are an experienced clinical AI physician assistant generating a DISCHARGE CARE PLAN. You must create a thorough, patient-friendly document. IMPORTANT RULES:
-- Reference ACTUAL patient data (vitals numbers, lab values, medication names and doses)
-- NEVER suggest anything the patient is allergic to
-- Consider their pharmacogenomics when discussing medications
-- Use warm, caring but medically accurate language
-- Be SPECIFIC — not generic advice. Reference THIS patient's conditions.
+    const systemPrompt = getCarePlanSystemPrompt(plan_type);
 
-Structure your response with these EXACT sections using ## headers:
-
-## Discharge Summary
-What happened during this hospital stay, why they were admitted, what was done.
-
-## Current Vital Signs at Discharge
-List their latest vitals with whether each is normal or needs monitoring.
-
-## Medications to Continue at Home
-For EACH medication: name, dose, when to take it, what it's for (in simple terms), and any food/drug interactions to avoid.
-
-## Warning Signs — Return to Hospital Immediately If:
-Specific symptoms for THIS patient's conditions that need emergency care.
-
-## Home Care Instructions
-Daily care routine specific to their conditions. Be very specific and practical.
-
-## Home Remedies & Natural Supportive Care
-Evidence-based home remedies for each condition (specific teas, foods, exercises, breathing techniques, sleep positions, etc.). Make these practical and specific.
-
-## Diet Plan
-Specific foods to eat and avoid for each condition. Include meal timing if relevant (e.g., for diabetes).
-
-## Exercise & Activity Guidelines
-What they can do, what to avoid, how to gradually increase activity.
-
-## Follow-Up Schedule
-Which doctor to see, when, what tests to get before the appointment.
-
-## Instructions for Family & Caregivers
-What to watch for, how to help, emergency contacts.
-
-CRITICAL RULES: Write each section ONCE — never repeat information. Keep each section 3-8 bullet points. Complete ALL sections. Do not stop mid-section.`
-
-      : `You are an experienced clinical AI generating a CURRENT CARE PLAN for a hospitalized patient. You must reference the ACTUAL patient data — real vital sign numbers, real lab values, real medications. IMPORTANT: be specific to THIS patient, not generic.
-
-Structure your response with these EXACT sections using ## headers:
-
-## Current Status Assessment
-Where does this patient stand RIGHT NOW? Reference their latest vitals (with actual numbers), recent labs (with values), and clinical trajectory (improving/stable/worsening based on vitals trends).
-
-## Priority Actions (Next 4-8 Hours)
-Numbered list of what needs attention, ordered by urgency. Reference specific vital sign thresholds.
-
-## Vital Signs Monitoring Plan
-What to monitor, how often, and the EXACT thresholds that should trigger escalation (e.g., "Call MD if HR > 120 or SpO2 < 92%").
-
-## Medication Schedule & Notes
-List upcoming medications with timing, and any special nursing considerations for each.
-
-## Pain & Comfort Management
-Current pain level, what's being done, what else could help. Include positioning, ice/heat, breathing exercises.
-
-## Nutrition & Hydration
-Current diet, fluid restrictions if any, blood sugar management plan if diabetic.
-
-## Activity & Mobility Plan
-Current activity level, mobilization goals, fall precautions if needed.
-
-## Supportive Care & Home Remedies
-Evidence-based comfort measures safe with current medications: warm compresses, breathing exercises, appropriate herbal teas, meditation, aromatherapy, etc.
-
-## Patient Education Points
-What the patient should understand about their condition and treatment plan today.
-
-## Escalation Triggers — Notify Doctor If:
-Specific findings with exact numbers that require physician notification.
-
-CRITICAL RULES: Write each section ONCE — never repeat information. Keep each section 3-8 bullet points. Complete ALL sections. Do not stop mid-section.`;
-
-    const plan = await generateAiResponse(provider, key, systemPrompt,
+    const plan = await generateAiResponse(key, systemPrompt,
       `IMPORTANT: Generate a detailed ${plan_type === "discharge" ? "DISCHARGE" : "CURRENT"} care plan for this patient. Use their ACTUAL data — real vitals numbers, real lab values, real medications. Do not be generic.\n\n${context}`
     );
 
     return NextResponse.json({
       success: true,
-      data: { plan, ai_model: provider, plan_type, patient_name: patient.name },
+      data: { plan, ai_model: "nvidia", plan_type, patient_name: patient.name },
       error: null, meta: { ai_powered: true, query_time_ms: Date.now() - startTime },
     });
   } catch (error) {

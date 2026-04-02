@@ -386,9 +386,24 @@ function PrescribeContent() {
                       </div>
                       <Button size="sm" onClick={() => applySuggestion(s)}>Use This</Button>
                     </div>
-                    <p className="text-sm text-[#D1D5DB] font-mono">{s.dose} — {s.frequency} — {s.route}</p>
-                    <p className="text-sm text-[#6B7280] mt-2">{s.rationale}</p>
-                    {s.warnings && <p className="text-sm text-amber-400/80 mt-1 flex items-start gap-1"><AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />{s.warnings}</p>}
+                    <div className="flex items-center gap-3 mt-1 mb-3">
+                      <span className="text-sm text-emerald-400 font-mono font-bold bg-emerald-500/10 px-2 py-0.5 rounded">{s.dose}</span>
+                      <span className="text-xs text-[#6B7280]">{s.frequency}</span>
+                      <span className="text-xs text-[#6B7280]">{s.route}</span>
+                    </div>
+                    <div className="rounded-xl bg-white/[0.02] border border-white/[0.04] p-3 mb-2">
+                      <p className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider mb-1">Clinical Rationale</p>
+                      <p className="text-sm text-[#D1D5DB] leading-relaxed">{s.rationale}</p>
+                    </div>
+                    {s.warnings && (
+                      <div className="rounded-xl bg-amber-500/5 border border-amber-500/15 p-3 flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-[10px] text-amber-400 font-semibold uppercase tracking-wider mb-0.5">Warnings & Monitoring</p>
+                          <p className="text-sm text-amber-300/80 leading-relaxed">{s.warnings}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               ))}
@@ -510,7 +525,67 @@ function PrescribeContent() {
             </div>
           )}
 
-          {result.interactions.length === 0 && (
+          {/* AI Multi-Dimension Analysis */}
+          {result.ai_analysis && (
+            <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}>
+              <Card className="border-emerald-500/20">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-emerald-400" />
+                    <h3 className="text-base font-semibold text-[#F0FDF4]">AI Comprehensive Safety Analysis</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge className={result.ai_analysis.safe_to_prescribe ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" : "bg-red-500/10 text-red-400 border-red-500/20"}>
+                      {result.ai_analysis.safe_to_prescribe ? "SAFE" : "CAUTION"}
+                    </Badge>
+                    <span className="text-sm font-bold font-mono" style={{ color: result.ai_analysis.risk_score > 6 ? "#EF4444" : result.ai_analysis.risk_score > 3 ? "#F59E0B" : "#22C55E" }}>
+                      {result.ai_analysis.risk_score}/10
+                    </span>
+                  </div>
+                </div>
+
+                {/* Overall assessment */}
+                <div className="rounded-xl bg-white/[0.02] border border-white/[0.04] p-3 mb-4">
+                  <p className="text-sm text-[#D1D5DB] leading-relaxed">{result.ai_analysis.overall_assessment}</p>
+                </div>
+
+                {/* 8 Dimensions Grid */}
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2 mb-4">
+                  {result.ai_analysis.dimensions.map((dim, i) => {
+                    const dimColor = dim.risk === "critical" ? "#EF4444" : dim.risk === "high" ? "#F97316" : dim.risk === "moderate" ? "#F59E0B" : dim.risk === "low" ? "#22C55E" : "#06B6D4";
+                    return (
+                      <motion.div key={dim.name} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
+                        className="rounded-xl bg-white/[0.02] border border-white/[0.04] p-3">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs font-semibold text-[#D1D5DB]">{dim.name}</span>
+                          <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ color: dimColor, backgroundColor: `${dimColor}15` }}>{dim.risk}</span>
+                        </div>
+                        <p className="text-xs text-[#6B7280] leading-relaxed">{dim.finding}</p>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+
+                {/* Dose Recommendation + Monitoring */}
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {result.ai_analysis.dose_recommendation && (
+                    <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/15 p-3">
+                      <p className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wider mb-1">Recommended Dose</p>
+                      <p className="text-sm text-[#D1D5DB] leading-relaxed">{result.ai_analysis.dose_recommendation}</p>
+                    </div>
+                  )}
+                  {result.ai_analysis.monitoring_plan && (
+                    <div className="rounded-xl bg-sky-500/5 border border-sky-500/15 p-3">
+                      <p className="text-[10px] text-sky-400 font-semibold uppercase tracking-wider mb-1">Monitoring Plan</p>
+                      <p className="text-sm text-[#D1D5DB] leading-relaxed">{result.ai_analysis.monitoring_plan}</p>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            </motion.div>
+          )}
+
+          {result.interactions.length === 0 && !result.ai_analysis && (
             <Card className="border-l-4 border-l-cyan-500 glow-safe">
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="h-6 w-6 text-cyan-400" />
@@ -555,6 +630,18 @@ function PrescribeContent() {
               ))}
             </div>
           )}
+          {/* Safety Trust Badge */}
+          <Card variant="glass" className="border-emerald-500/10">
+            <div className="flex items-start gap-3">
+              <Shield className="h-5 w-5 text-emerald-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs font-semibold text-emerald-400 mb-1">5-Layer Safety Architecture</p>
+                <p className="text-[11px] text-[#6B7280] leading-relaxed">
+                  This analysis passed through: <span className="text-[#D1D5DB]">toxic substance blocklist</span> → <span className="text-[#D1D5DB]">FDA database validation</span> → <span className="text-[#D1D5DB]">rule-based interaction engine</span> → <span className="text-[#D1D5DB]">AI multi-dimension analysis</span> → <span className="text-[#D1D5DB]">server-side safety override</span>. MedTrace is a clinical decision support tool — all recommendations require physician review and approval before administration.
+                </p>
+              </div>
+            </div>
+          </Card>
         </motion.div>
       )}
     </div>

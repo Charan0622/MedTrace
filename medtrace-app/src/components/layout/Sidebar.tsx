@@ -25,7 +25,7 @@ const NAV_ITEMS = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout, hasAi, aiProvider } = useAuth();
+  const { user, logout, hasAi } = useAuth();
 
   function handleLogout() {
     logout();
@@ -100,7 +100,7 @@ export function Sidebar() {
       <div className="mx-4 mb-4 rounded-xl bg-white/[0.02] px-3 py-2.5">
         <div className="flex items-center gap-2 text-[11px] text-[#6B7280]">
           <div className={cn("vital-dot", hasAi ? "vital-normal" : "vital-warning")} />
-          <span>{hasAi ? `${aiProvider === "nvidia" ? "NVIDIA Nemotron" : "Gemini"} Active` : "Database Mode"}</span>
+          <span>{hasAi ? "NVIDIA NIM Active" : "Database Mode"}</span>
         </div>
       </div>
     </aside>

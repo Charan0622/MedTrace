@@ -4,7 +4,7 @@ import { getDb } from "@/lib/db";
 
 export async function POST(request: Request) {
   const startTime = Date.now();
-  const { provider, key } = getProviderAndKey(request);
+  const { key } = getProviderAndKey(request);
   const body = await request.json();
   const { patient_id } = body as { patient_id: string };
 
@@ -41,22 +41,29 @@ export async function POST(request: Request) {
   if (hr && hr > 100) recommendations.push("Continue cardiac monitoring");
   if (sugar && sugar > 200) recommendations.push("Check insulin orders");
 
-  if (!provider || !key) {
+  if (!key) {
     return NextResponse.json({ success: true, data: { patient_id, summary: anomalies.length > 0 ? `${anomalies.length} abnormal finding(s). ${anomalies[0]}.` : "All vitals within normal limits.", anomalies, recommendations, risk_level: anomalies.length >= 3 ? "critical" : anomalies.length >= 1 ? "moderate" : "safe", ai_model: "rule-based" }, error: null, meta: { ai_powered: false, query_time_ms: Date.now() - startTime } });
   }
 
   try {
     const vitalsText = vitals.map((v) => `[${v.recorded_at}] by ${v.recorded_by}: HR=${v.heart_rate}bpm BP=${v.blood_pressure_sys}/${v.blood_pressure_dia}mmHg SpO2=${v.spo2}% RR=${v.respiratory_rate}/min Temp=${v.temperature}°F Sugar=${v.blood_sugar}mg/dL Pain=${v.pain_level}/10 ${v.notes ? `(Note: ${v.notes})` : ""}`).join("\n");
-    const text = await generateAiResponse(provider, key,
-      `You are a clinical vital signs analysis AI. Analyze the patient's vital sign trends and return a JSON object with exactly these fields:
-{"summary":"2-3 sentence clinical assessment referencing actual numbers and trends","anomalies":["specific finding 1 with actual values","finding 2"],"recommendations":["specific action 1","action 2"]}
+    const text = await generateAiResponse(key,
+      `You are an expert clinical vital signs analysis AI with ICU-level pattern recognition. Analyze the patient's vital sign trends with the precision of a seasoned intensivist. Return a JSON object with exactly these fields:
+{"summary":"2-3 sentence clinical assessment referencing actual numbers, trends over time, and clinical significance","anomalies":["specific finding with actual values and clinical implication","finding 2 with trajectory"],"recommendations":["specific prioritized action with rationale","action 2"]}
 
-Look for: trending changes between readings, correlations between vitals (e.g., rising HR with dropping BP = possible hemorrhage), values outside normal ranges, and improvement/deterioration patterns. Reference the actual numbers in your analysis. Return ONLY valid JSON, no other text.`,
+Advanced analysis required:
+- Detect trending changes between readings — a vital moving toward abnormal is as important as one already abnormal
+- Identify correlations between vitals (rising HR + dropping BP = possible hemorrhage/sepsis, rising temp + rising HR = infection, dropping SpO2 + rising RR = respiratory decompensation)
+- Calculate rate of change — rapid deterioration is more urgent than gradual
+- Note circadian patterns — vitals that worsen at specific times suggest specific etiologies
+- Compare most recent reading against the patient's own baseline, not just textbook normals
+- Flag "quiet" dangers — a "normal" HR of 90 in a patient who was consistently at 65 is concerning
+Reference the ACTUAL numbers and timestamps in your analysis. Return ONLY valid JSON, no other text.`,
       `Patient: ${patient.name}\nVitals history (${vitals.length} readings, most recent first):\n${vitalsText}`);
     const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
     let result;
     try { result = JSON.parse(cleaned); } catch { result = { summary: text, anomalies, recommendations }; }
-    return NextResponse.json({ success: true, data: { patient_id, ...result, risk_level: (result.anomalies?.length ?? 0) >= 2 ? "high" : (result.anomalies?.length ?? 0) >= 1 ? "moderate" : "safe", ai_model: provider }, error: null, meta: { ai_powered: true, query_time_ms: Date.now() - startTime } });
+    return NextResponse.json({ success: true, data: { patient_id, ...result, risk_level: (result.anomalies?.length ?? 0) >= 2 ? "high" : (result.anomalies?.length ?? 0) >= 1 ? "moderate" : "safe", ai_model: "nvidia" }, error: null, meta: { ai_powered: true, query_time_ms: Date.now() - startTime } });
   } catch (error) {
     return NextResponse.json({ success: true, data: { patient_id, summary: `${anomalies.length > 0 ? anomalies[0] : "Vitals normal."} (AI: ${formatAiError(error)})`, anomalies, recommendations, risk_level: anomalies.length >= 2 ? "high" : anomalies.length >= 1 ? "moderate" : "safe", ai_model: "rule-based-fallback" }, error: null, meta: { ai_powered: false, query_time_ms: Date.now() - startTime } });
   }

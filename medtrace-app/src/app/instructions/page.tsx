@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle2, Clock, Stethoscope, Filter } from "lucide-react";
+import { CheckCircle2, Clock, Stethoscope, Filter, Undo2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -39,6 +39,16 @@ export default function InstructionsPage() {
     });
     if (res.success) {
       setInstructions((prev) => prev.map((i) => i.id === insId ? { ...i, status: "completed", completed_by: user?.name } : i));
+    }
+  }
+
+  async function undoComplete(insId: string) {
+    const res = await apiClient<Row>("/api/instructions", {
+      method: "PATCH",
+      body: JSON.stringify({ id: insId, status: "pending" }),
+    });
+    if (res.success) {
+      setInstructions((prev) => prev.map((i) => i.id === insId ? { ...i, status: "pending", completed_by: null, completed_at: null } : i));
     }
   }
 
@@ -82,7 +92,10 @@ export default function InstructionsPage() {
                     {!isCompleted && user?.role === "nurse" && (
                       <Button variant="secondary" size="sm" onClick={() => markComplete(ins.id as string)}><CheckCircle2 className="h-4 w-4" /> Done</Button>
                     )}
-                    {isCompleted && <CheckCircle2 className="h-5 w-5 text-green-400 mt-1" />}
+                    {isCompleted && user?.role === "nurse" && (
+                      <Button variant="ghost" size="sm" onClick={() => undoComplete(ins.id as string)} className="text-yellow-400 hover:text-yellow-300"><Undo2 className="h-4 w-4" /> Undo</Button>
+                    )}
+                    {isCompleted && user?.role !== "nurse" && <CheckCircle2 className="h-5 w-5 text-green-400 mt-1" />}
                   </div>
                 </Card>
               </motion.div>

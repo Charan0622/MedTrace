@@ -1,22 +1,16 @@
 // ============================================================
-// MedTrace — Gemini RAG Pipeline for Drug Information
-// Uses Google Gemini 1.5 Flash (free tier: 15 RPM, 1M tokens/day)
-// API key provided by user at login, passed via X-Gemini-Key header
+// MedTrace — Drug Information RAG Pipeline (NVIDIA NIM)
+// Uses Llama 3.1 8B for fast drug summaries
+// API key provided by user at login, passed via X-AI-Key header
 // ============================================================
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
 import { getDb } from "./db";
 import { logger } from "./logger";
 import crypto from "crypto";
 
-export function isGeminiAvailable(apiKey?: string | null): boolean {
-  return !!(apiKey || process.env.GEMINI_API_KEY);
-}
-
-function getClient(apiKey?: string | null): GoogleGenerativeAI | null {
-  const key = apiKey || process.env.GEMINI_API_KEY;
-  if (!key) return null;
-  return new GoogleGenerativeAI(key);
+export function isAiAvailable(apiKey?: string | null): boolean {
+  return !!apiKey;
 }
 
 function hashQuery(query: string): string {
@@ -75,7 +69,7 @@ export function retrieveDrugContext(drugName: string): {
 
 export async function generateDrugSummary(drugName: string, apiKey?: string | null): Promise<{
   summary: string;
-  source: "gemini-cache" | "gemini-live" | "database-only";
+  source: "ai-cache" | "ai-live" | "database-only";
   drugInfo: Record<string, unknown> | null;
   interactions: Record<string, unknown>[];
 }> {
@@ -88,17 +82,20 @@ export async function generateDrugSummary(drugName: string, apiKey?: string | nu
   const cached = getCachedSummary(drugName);
   if (cached) {
     logger.info(`Drug info cache hit for ${drugName}`);
-    return { summary: cached, source: "gemini-cache", drugInfo, interactions };
+    return { summary: cached, source: "ai-cache", drugInfo, interactions };
   }
 
-  const client = getClient(apiKey);
-  if (!client) {
+  if (!apiKey) {
     return { summary: buildFallbackSummary(drugInfo), source: "database-only", drugInfo, interactions };
   }
 
   try {
-    logger.info(`Querying Gemini for drug summary: ${drugName}`);
-    const model = client.getGenerativeModel({ model: "gemini-2.0-flash" });
+    logger.info(`Querying NVIDIA NIM for drug summary: ${drugName}`);
+    const client = new OpenAI({
+      apiKey,
+      baseURL: "https://integrate.api.nvidia.com/v1",
+      timeout: 30000,
+    });
 
     const prompt = `You are a clinical pharmacology AI in a hospital nursing station called MedTrace. Using ONLY the verified drug data below, generate a clear clinical summary.
 
@@ -133,16 +130,21 @@ ${context}
 ---
 Be concise. Clinical language. Do NOT invent information beyond the data.`;
 
-    const result = await model.generateContent(prompt);
-    const summary = result.response.text();
-    cacheSummary(drugName, summary, "gemini-2.0-flash", context);
-    return { summary, source: "gemini-live", drugInfo, interactions };
+    const response = await client.chat.completions.create({
+      model: "meta/llama-3.1-8b-instruct",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.3,
+      max_tokens: 1024,
+    });
+    const summary = response.choices[0]?.message?.content ?? "";
+    cacheSummary(drugName, summary, "llama-3.1-8b", context);
+    return { summary, source: "ai-live", drugInfo, interactions };
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
-    logger.error(`Gemini query failed for ${drugName}: ${errMsg}`);
+    logger.error(`AI query failed for ${drugName}: ${errMsg}`);
     let fallback = buildFallbackSummary(drugInfo);
     if (errMsg.includes("429") || errMsg.includes("quota")) {
-      fallback = `**Gemini API quota exceeded** — showing database info instead.\n\n` + fallback;
+      fallback = `**API quota exceeded** — showing database info instead.\n\n` + fallback;
     }
     return { summary: fallback, source: "database-only", drugInfo, interactions };
   }

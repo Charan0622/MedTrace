@@ -6,7 +6,7 @@ type Row = Record<string, unknown>;
 
 export async function POST(request: Request) {
   const startTime = Date.now();
-  const { provider, key } = getProviderAndKey(request);
+  const { key } = getProviderAndKey(request);
   const body = await request.json();
   const { patient_id, question, user_role } = body as { patient_id: string; question: string; user_role: string };
 
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: false, data: null, error: { code: "INVALID_INPUT", message: "patient_id and question required" }, meta: {} }, { status: 400 });
   }
 
-  if (!provider || !key) {
+  if (!key) {
     return NextResponse.json({ success: true, data: { answer: "AI key required for the Clinical Copilot. Please add your API key at login.", ai_model: "none" }, error: null, meta: { ai_powered: false, query_time_ms: Date.now() - startTime } });
   }
 
@@ -43,11 +43,22 @@ LABS: ${labs.map((l) => `${l.test_name}: ${l.value} ${l.unit} [${l.status}]`).jo
 NOTES: ${recentNotes.map((n) => `[${n.author}] ${n.content}`).join("; ") || "None"}
 INSTRUCTIONS: ${instructions.filter((i) => i.status !== "completed").map((i) => `[${i.priority}] ${i.instruction}`).join("; ") || "None"}`;
 
-  const systemPrompt = `You are MedTrace Clinical Copilot in a hospital nursing station. ${user_role === "doctor" ? "Speaking to a physician — use clinical detail." : "Speaking to a nurse — focus on bedside care, monitoring, what to report."} Answer using ONLY the patient data provided. Be concise and actionable.`;
+  const systemPrompt = `You are MedTrace Clinical Copilot — an expert AI clinical assistant embedded in a hospital nursing station. You have deep knowledge of pharmacology, pathophysiology, drug interactions, and evidence-based nursing practice.
+
+${user_role === "doctor" ? "You are speaking to a PHYSICIAN — use clinical terminology, cite evidence levels, suggest differential diagnoses, reference specific lab values and vital trends, and provide medication adjustment reasoning with pharmacokinetic considerations. Consider the patient's pharmacogenomic profile when discussing drug metabolism." : "You are speaking to a NURSE — focus on bedside assessment priorities, what to monitor and how often, specific parameters that should trigger a call to the physician (with exact numbers), medication administration considerations (timing, food interactions, hold parameters), patient comfort measures, and documentation reminders."}
+
+RULES:
+- Answer using ONLY the patient data provided — never fabricate values or medications
+- Reference actual numbers from their vitals, labs, and medication doses
+- Always cross-check recommendations against the patient's allergy list
+- If a question involves medications, consider their pharmacogenomic profile for metabolism concerns
+- Be concise but thorough — every sentence should be clinically actionable
+- If you're unsure about something, say so rather than guessing
+- Format responses with markdown for readability (bold key values, use bullet points for lists)`;
 
   try {
-    const answer = await generateAiResponse(provider, key, systemPrompt, `PATIENT DATA:\n${context}\n\nQUESTION: ${question}`);
-    return NextResponse.json({ success: true, data: { answer, ai_model: provider }, error: null, meta: { ai_powered: true, query_time_ms: Date.now() - startTime } });
+    const answer = await generateAiResponse(key, systemPrompt, `PATIENT DATA:\n${context}\n\nQUESTION: ${question}`);
+    return NextResponse.json({ success: true, data: { answer, ai_model: "nvidia" }, error: null, meta: { ai_powered: true, query_time_ms: Date.now() - startTime } });
   } catch (error) {
     return NextResponse.json({ success: false, data: null, error: { code: "AI_ERROR", message: formatAiError(error) }, meta: { query_time_ms: Date.now() - startTime } }, { status: 500 });
   }

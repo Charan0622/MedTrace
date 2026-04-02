@@ -6,7 +6,7 @@ type Row = Record<string, unknown>;
 
 export async function POST(request: Request) {
   const startTime = Date.now();
-  const { provider, key } = getProviderAndKey(request);
+  const { key } = getProviderAndKey(request);
   const body = await request.json();
   const { patient_id } = body as { patient_id: string };
 
@@ -40,41 +40,81 @@ VITALS: ${latestVitals ? `HR:${latestVitals.heart_rate} BP:${latestVitals.blood_
 LABS: ${labs.map((l) => `${l.test_name}: ${l.value} ${l.unit} [${l.status}]`).join(", ") || "None"}`;
 
   // === AI-POWERED SUGGESTIONS ===
-  if (provider && key) {
+  if (key) {
     try {
       const allDrugs = db.prepare("SELECT name, generic_name, drug_class FROM drugs ORDER BY name").all() as Row[];
-      const text = await generateAiResponse(provider, key,
-        `You are a clinical decision support AI for hospital physicians. Based on the patient data, suggest 3-5 NEW medications that are NOT already prescribed. Consider the patient's specific conditions, current medications (avoid duplicates and dangerous interactions), allergies (NEVER suggest allergens), pharmacogenomics, vitals, and lab results.
+      const text = await generateAiResponse(key,
+        `You are an expert clinical pharmacologist AI with deep knowledge of drug interactions, pharmacogenomics, and evidence-based prescribing. You are assisting a hospital physician with medication recommendations for a specific patient.
 
-For EACH suggestion provide clinical reasoning specific to THIS patient. Be practical and evidence-based.
+Suggest 3-5 NEW medications that are NOT already prescribed. Your recommendations must demonstrate sophisticated clinical reasoning:
 
-Return ONLY a valid JSON array: [{"drug_name":"...", "dose":"...", "frequency":"...", "route":"Oral", "rationale":"...", "warnings":"...", "priority":"high|medium|low"}]
+CLINICAL REASONING REQUIREMENTS:
+- Analyze the patient's conditions and identify undertreated or untreated issues
+- Consider their current drug regimen for synergistic opportunities (e.g., if they're on a beta-blocker for heart failure, suggest an ACE inhibitor if not already on one)
+- Review their lab values — if renal function is impaired, adjust doses accordingly; if electrolytes are off, consider drugs that address or don't worsen that
+- Factor in their pharmacogenomic profile — if they're a CYP2D6 poor metabolizer, avoid drugs primarily metabolized by that enzyme or adjust dose
+- Consider their age and sex for dose adjustments and drug selection
+- Look at their vitals trends — if BP is trending up despite current medications, suggest add-on therapy
+- Identify preventive medications they should be on (DVT prophylaxis, stress ulcer prophylaxis, etc.) based on their admission context
 
-Rules:
-- NEVER suggest a drug the patient is already taking
-- NEVER suggest a drug the patient is allergic to
-- Consider the patient's specific lab values and vitals when choosing doses
-- Explain WHY this drug is needed for THIS specific patient
-- Mention any dose adjustments needed (renal, hepatic, age, weight, genetics)`,
+RATIONALE MUST EXPLAIN (this is what impresses physicians — be thorough):
+1. WHY this specific drug — not just "for hypertension" but "Patient's BP is 158/92 trending up despite current Amlodipine 5mg. Adding Losartan provides dual-mechanism control via RAAS pathway, complementing the calcium channel blockade"
+2. WHY this exact dose/concentration — "Starting at 25mg (not 50mg) because patient is ${">"}65 years old with mildly elevated creatinine at 1.4 mg/dL, suggesting reduced renal clearance. Lower starting dose minimizes hypotension risk"
+3. HOW you calculated it — "Based on patient's age (72y), weight, eGFR estimate from creatinine 1.4, and current medication load of 6 drugs — dose adjusted downward to reduce polypharmacy burden"
+4. LIFESTYLE factors — "Patient's diabetes and sedentary admission status increase cardiovascular risk. This medication also provides renal protective benefits for diabetic nephropathy"
+5. DISEASE interaction — "This drug treats their primary condition (hypertension) while also benefiting their comorbid condition (diabetic nephropathy) — dual therapeutic value"
+6. WHAT the drug's active compound does at molecular level — brief 1-line mechanism like "Blocks angiotensin II AT1 receptors, reducing vasoconstriction and aldosterone secretion"
+
+Return ONLY a valid JSON array with this format:
+[{
+  "drug_name": "Losartan",
+  "dose": "25mg",
+  "frequency": "Once daily",
+  "route": "Oral",
+  "rationale": "MUST be 3-5 sentences covering: WHY this drug for THIS patient (cite their specific vitals/labs/conditions), WHY this dose (explain calculation based on age/weight/renal function), and HOW it complements their existing medications. End with the molecular mechanism in 1 line.",
+  "warnings": "Monitor potassium levels (risk of hyperkalemia with current Lisinopril). Check renal function in 1 week. Hold if systolic BP < 90. Watch for dizziness in first 48 hours.",
+  "priority": "high|medium|low"
+}]
+
+ABSOLUTE RULES:
+- NEVER suggest a drug the patient is already taking (check the list carefully)
+- NEVER suggest a drug the patient is allergic to or a cross-reactive drug in the same class
+- The "rationale" MUST cite specific patient numbers — actual BP readings, lab values, age, condition names. Generic rationales are unacceptable.
+- The "warnings" field must include monitoring requirements, hold parameters, and key drug-drug interactions with their current regimen
+- Doses must be justified by the patient's age, renal/hepatic function, and pharmacogenomics
+- Each suggestion should feel like a senior physician explaining their thought process to a resident`,
         `${patientContext}\n\nAVAILABLE DRUGS: ${allDrugs.map((d) => d.name).join(", ")}\n\nSuggest medications specifically for this patient.`
       );
 
-      const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      // Extract JSON from AI response — handle markdown wrapping, extra text, etc.
+      let cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      // Try to find JSON array in the response
+      const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
+      if (jsonMatch) cleaned = jsonMatch[0];
+
       let suggestions;
       try {
         suggestions = JSON.parse(cleaned);
+        if (!Array.isArray(suggestions)) suggestions = [];
         // Filter out any drugs already prescribed or allergens
         suggestions = suggestions.filter((s: { drug_name: string }) =>
+          s.drug_name &&
           !currentDrugNames.has(s.drug_name.toLowerCase()) &&
           !allergenNames.has(s.drug_name.toLowerCase())
         );
       } catch {
-        suggestions = [];
+        // AI returned non-JSON — fall through to rule-based
+        const rbSuggestions = buildSmartSuggestions(conditionNames, currentDrugNames, allergenNames, latestVitals, labs, patient, genotypes, db);
+        return NextResponse.json({
+          success: true,
+          data: { suggestions: rbSuggestions, patient_context_summary: summary, ai_model: "rule-based", ai_error: "AI returned invalid format, using rule-based fallback" },
+          error: null, meta: { ai_powered: false, query_time_ms: Date.now() - startTime },
+        });
       }
 
       return NextResponse.json({
         success: true,
-        data: { suggestions, patient_context_summary: summary, ai_model: provider },
+        data: { suggestions, patient_context_summary: summary, ai_model: "nvidia" },
         error: null, meta: { ai_powered: true, query_time_ms: Date.now() - startTime },
       });
     } catch (error) {

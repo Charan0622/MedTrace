@@ -6,7 +6,7 @@ type Row = Record<string, unknown>;
 
 export async function POST(request: Request) {
   const startTime = Date.now();
-  const { provider, key } = getProviderAndKey(request);
+  const { key } = getProviderAndKey(request);
   const db = getDb();
 
   // Build comprehensive patient data for each admitted patient
@@ -71,7 +71,7 @@ ${p.pendingTasks.join("\n") || "None"}
 RECENT NOTES: ${p.recentNotes.join(" | ") || "None"}
 `).join("\n========================================\n");
 
-  if (!provider || !key) {
+  if (!key) {
     // Rule-based handoff
     const report = patientDetails.map((p) => `## ${p.name} — Room ${p.room} (${p.roomType})
 **Diagnosis:** ${p.diagnosis}
@@ -93,66 +93,72 @@ ${p.pendingTasks.map((t) => `- ${t}`).join("\n") || "- None"}
 
     return NextResponse.json({
       success: true,
-      data: { report: `# Shift Handoff Report\n*Generated: ${new Date().toLocaleString()} — Rule-based*\n*Add AI key at login for enhanced clinical handoff*\n\n---\n\n${report}`, ai_model: "rule-based" },
+      data: { report: `# Shift Handoff Report\n*Generated: ${new Date().toLocaleString()} — Rule-based*\n*Add AI key at login for enhanced clinical handoff*\n\n---\n\n${report}`, ai_model: "rule-based", patients: patientDetails },
       error: null, meta: { ai_powered: false, query_time_ms: Date.now() - startTime },
     });
   }
 
   try {
-    const report = await generateAiResponse(provider, key,
-      `You are a senior clinical AI generating a SHIFT HANDOFF REPORT (SBAR format) for the incoming duty doctor and nursing team. This report must be thorough, clinically precise, and actionable.
+    const report = await generateAiResponse(key,
+      `You are a senior charge nurse AI with 25+ years of experience generating a SHIFT HANDOFF REPORT using the SBAR (Situation-Background-Assessment-Recommendation) format. This report is the lifeline between shifts — the incoming team will rely on it entirely. It must be thorough, clinically precise, and leave no critical detail unmentioned.
 
 IMPORTANT RULES:
-- Reference ACTUAL patient data — real vital sign numbers, real lab values, medication doses
-- Prioritize patients by acuity — sickest patients FIRST
-- For each patient, clearly state what the incoming team needs to DO
-- Flag any concerning trends in vitals
-- Highlight held/skipped medications and WHY
-- Use clinical language appropriate for physicians
+- Reference ACTUAL patient data — real vital sign numbers with trends, real lab values with clinical significance, exact medication names and doses
+- Prioritize patients by acuity — sickest patients FIRST (ICU patients before general ward)
+- For each patient, clearly state what the incoming team needs to DO in the first 2 hours
+- Analyze vital sign trends — a stable but deteriorating patient is MORE dangerous than an obviously sick one
+- Highlight held/skipped medications and provide the clinical rationale
+- Flag drug interactions or pharmacogenomic concerns that affect care decisions
+- Note any changes from the previous shift (new orders, medication changes, procedure results)
+- Use clinical language appropriate for physicians but ensure nursing actions are crystal clear
 
 Structure the report with these sections:
 
 # Shift Handoff Report
-Include date/time and unit name.
+Include date/time, unit name, and outgoing nurse/team identifier.
 
 For EACH patient (ordered by acuity — most critical first), create:
 
 ## [Patient Name] — Room [Number] ([Room Type])
 ### Situation
-One-line current status. Is the patient stable, improving, or deteriorating?
+One-line current status with acuity level. Is the patient stable, improving, or deteriorating? If deteriorating, state the rate of change and which vitals are concerning. Include code status if relevant.
 
 ### Background
-Diagnosis, admission date, reason, relevant history, allergies, genetics.
+Diagnosis, admission date and day number, reason for admission, significant comorbidities, allergies (with reaction type — this prevents errors), pharmacogenomic profile if relevant, and any recent procedures or events this shift.
 
 ### Assessment
-- Current vitals (with actual numbers) and whether they're trending better/worse
-- Abnormal labs (with values and clinical significance)
-- Active medications and any that were held/skipped with reasons
-- Pain status and management effectiveness
+- Current vitals with actual numbers AND comparison to 8 hours ago — explicitly state if trending better or worse
+- Abnormal labs with values, reference ranges, and what the abnormality means for THIS patient
+- Active medications — highlight any newly started, dose-changed, or held/skipped with reasons
+- Pain management — current level, what's been given, effectiveness, and time of next PRN eligibility
+- I/O balance if relevant, wound/drain status, fall risk level
+- Mental status and any changes in orientation or behavior
 
 ### Recommendation
-- Specific actions for the incoming team (numbered list)
-- Pending tasks that need completion
-- Medications due in the next 4 hours
-- Lab draws or tests needed
-- Thresholds for calling the attending
+- Top 3 priority actions for the incoming team (numbered, most urgent first)
+- Pending tasks with deadlines (e.g., "Blood draw for BMP due at 0600")
+- Medications due in the next 4 hours with any special considerations
+- Specific monitoring parameters — "Check blood sugar q2h until below 200" or "Neuro checks q1h for 4 hours post-procedure"
+- Exact thresholds for calling the attending with the attending's name and preference (e.g., "Call Dr. Chen if HR > 120 or new-onset confusion")
+- Any pending consults, imaging, or family meetings
 
 After all patients, add:
 
 ## Unit Summary
-- Total patients and beds available
-- Patients requiring close monitoring
-- Any pending admissions or discharges
-- Critical items for the incoming shift
+- Census: total patients, bed availability, expected admissions/discharges/transfers
+- Patients requiring 1:1 or close monitoring (list by name and reason)
+- Critical lab results pending or expected
+- Equipment or supply issues
+- Key handoff items that don't fit under individual patients
 
-CRITICAL RULES: Do NOT repeat patient information across sections. Each patient section should be concise (SBAR = 4 focused paragraphs). Complete the ENTIRE report for ALL patients. Do not stop mid-report.`,
+CRITICAL RULES: Do NOT repeat patient information across SBAR sections. Each patient section should be focused and actionable. Complete the ENTIRE report for ALL patients — do not stop mid-report. Every recommendation must be safe given each patient's allergy list and current medications. Flag any patient whose condition changed significantly this shift.`,
 
       `Generate a comprehensive shift handoff report for the incoming medical team. There are ${patientDetails.length} patients currently admitted.\n\n${context}`
     );
 
     return NextResponse.json({
       success: true,
-      data: { report, ai_model: provider },
+      data: { report, ai_model: "Nemotron Super 49B", patients: patientDetails },
       error: null, meta: { ai_powered: true, query_time_ms: Date.now() - startTime },
     });
   } catch (error) {
@@ -160,7 +166,7 @@ CRITICAL RULES: Do NOT repeat patient information across sections. Each patient 
     const report = patientDetails.map((p) => `## ${p.name} — Room ${p.room}\n**Dx:** ${p.diagnosis}\n**Vitals:** ${p.vitals}\n**Pending:** ${p.pendingTasks.length > 0 ? p.pendingTasks.map((t) => `- ${t}`).join("\n") : "None"}`).join("\n\n---\n\n");
     return NextResponse.json({
       success: true,
-      data: { report: `# Shift Handoff Report\n*AI error: ${formatAiError(error)}*\n\n---\n\n${report}`, ai_model: "rule-based-fallback" },
+      data: { report: `# Shift Handoff Report\n*AI error: ${formatAiError(error)}*\n\n---\n\n${report}`, ai_model: "rule-based-fallback", patients: patientDetails },
       error: null, meta: { ai_powered: false, query_time_ms: Date.now() - startTime },
     });
   }

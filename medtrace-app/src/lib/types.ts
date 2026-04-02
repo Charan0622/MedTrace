@@ -306,12 +306,29 @@ export interface InteractionChain {
   evidence_level?: string;
 }
 
+export interface AiDimension {
+  name: string;
+  risk: string;
+  finding: string;
+}
+
+export interface AiInteractionAnalysis {
+  safe_to_prescribe: boolean;
+  confidence: string;
+  overall_assessment: string;
+  risk_score: number;
+  dimensions: AiDimension[];
+  dose_recommendation: string;
+  monitoring_plan: string;
+}
+
 export interface PrescriptionCheckResult {
   patient_id: string;
   new_drug: string;
   overall_risk: RiskLevel;
   interactions: InteractionChain[];
   ai_powered: boolean;
+  ai_analysis?: AiInteractionAnalysis | null;
 }
 
 export interface AlternativeDrug {

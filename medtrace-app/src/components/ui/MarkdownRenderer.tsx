@@ -43,8 +43,10 @@ function parseBlocks(content: string): Block[] {
       const parsed = parseTable(tableLines);
       if (parsed) {
         blocks.push(parsed);
-        continue;
+        continue; // i already advanced past the table
       }
+      // If table parse failed, rewind and treat first line as paragraph
+      i -= tableLines.length;
     }
 
     if (line.startsWith("### ")) { blocks.push({ type: "heading", level: 3, text: line.slice(4) }); }
@@ -54,6 +56,7 @@ function parseBlocks(content: string): Block[] {
     else if (line.startsWith("- ") || line.startsWith("* ")) { blocks.push({ type: "bullet", text: line.slice(2) }); }
     else if (/^\d+\.\s/.test(line)) { const match = line.match(/^(\d+)\.\s(.*)$/); blocks.push({ type: "numbered", num: match?.[1] ?? "", text: match?.[2] ?? line }); }
     else if (line.startsWith("```")) { blocks.push({ type: "code", text: line.slice(3) }); }
+    else if (/^[|:\-\s]+$/.test(line.trim())) { blocks.push({ type: "empty" }); } // skip table separator lines
     else if (line.trim() === "") { blocks.push({ type: "empty" }); }
     else { blocks.push({ type: "paragraph", text: line }); }
 
@@ -82,21 +85,24 @@ function parseTable(lines: string[]): Block | null {
 }
 
 function renderInline(text: string): React.ReactNode {
-  // Bold **text** or __text__
-  const parts = text.split(/(\*\*.*?\*\*|__.*?__)/g);
+  // Split on: **bold**, __bold__, `code`, *italic*
+  const parts = text.split(/(\*\*.*?\*\*|__.*?__|`.*?`|\*[^*]+?\*)/g);
   return parts.map((part, i) => {
-    if ((part.startsWith("**") && part.endsWith("**")) || (part.startsWith("__") && part.endsWith("__"))) {
+    if (!part) return null;
+    // Bold **text** or __text__
+    if ((part.startsWith("**") && part.endsWith("**"))) {
+      return <strong key={i} className="text-[#F0FDF4] font-semibold">{part.slice(2, -2)}</strong>;
+    }
+    if ((part.startsWith("__") && part.endsWith("__"))) {
       return <strong key={i} className="text-[#F0FDF4] font-semibold">{part.slice(2, -2)}</strong>;
     }
     // Inline code `text`
-    if (part.includes("`")) {
-      const codeParts = part.split(/(`.*?`)/g);
-      return codeParts.map((cp, j) => {
-        if (cp.startsWith("`") && cp.endsWith("`")) {
-          return <code key={`${i}-${j}`} className="bg-white/[0.04] px-1.5 py-0.5 rounded text-emerald-400 text-xs font-mono">{cp.slice(1, -1)}</code>;
-        }
-        return cp;
-      });
+    if (part.startsWith("`") && part.endsWith("`") && part.length > 1) {
+      return <code key={i} className="bg-white/[0.04] px-1.5 py-0.5 rounded text-emerald-400 text-xs font-mono">{part.slice(1, -1)}</code>;
+    }
+    // Italic *text* (single asterisk, not empty)
+    if (part.startsWith("*") && part.endsWith("*") && !part.startsWith("**") && part.length > 2) {
+      return <em key={i} className="text-[#A1A1AA] italic">{part.slice(1, -1)}</em>;
     }
     return part;
   });
@@ -105,8 +111,8 @@ function renderInline(text: string): React.ReactNode {
 function renderBlock(block: Block, key: number): React.ReactNode {
   switch (block.type) {
     case "heading":
-      if (block.level === 1) return <h2 key={key} className="text-lg font-bold text-[#F0FDF4] mt-4 mb-1">{renderInline(block.text)}</h2>;
-      if (block.level === 2) return <h3 key={key} className="text-base font-semibold text-[#F0FDF4] mt-3 mb-1">{renderInline(block.text)}</h3>;
+      if (block.level === 1) return <h2 key={key} className="text-lg font-bold text-[#F0FDF4] mt-4 mb-1 flex items-center gap-2">{renderInline(block.text)}</h2>;
+      if (block.level === 2) return <h3 key={key} className="text-base font-semibold text-[#F0FDF4] mt-4 mb-1.5 pb-1 border-b border-emerald-500/20 flex items-center gap-2">{renderInline(block.text)}</h3>;
       return <h4 key={key} className="text-sm font-semibold text-[#D1D5DB] mt-2 mb-1">{renderInline(block.text)}</h4>;
 
     case "paragraph":

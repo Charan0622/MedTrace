@@ -3,8 +3,6 @@
 import { createContext, useContext, useState, useCallback, useEffect } from "react";
 import type { UserRole } from "./types";
 
-export type AiProvider = "gemini" | "nvidia" | "none";
-
 interface SessionUser {
   id: string;
   name: string;
@@ -16,9 +14,8 @@ interface SessionUser {
 
 interface AuthContextType {
   user: SessionUser | null;
-  aiProvider: AiProvider;
   aiKey: string | null;
-  login: (user: SessionUser, provider: AiProvider, apiKey: string) => void;
+  login: (user: SessionUser, apiKey: string) => void;
   logout: () => void;
   isDoctor: boolean;
   isNurse: boolean;
@@ -29,7 +26,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  aiProvider: "none",
   aiKey: null,
   login: () => {},
   logout: () => {},
@@ -44,7 +40,6 @@ const STORAGE_KEY = "medtrace_session";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
-  const [aiProvider, setAiProvider] = useState<AiProvider>("none");
   const [aiKey, setAiKey] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -55,8 +50,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const session = JSON.parse(saved);
         if (session.user) {
           setUser(session.user);
-          setAiProvider(session.aiProvider ?? "none");
-          setAiKey(session.aiKey ?? null);
+          // Support legacy formats
+          setAiKey(session.aiKey ?? session.nvidiaKey ?? null);
         }
       }
     } catch {
@@ -65,40 +60,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoaded(true);
   }, []);
 
-  const login = useCallback((newUser: SessionUser, provider: AiProvider, apiKey: string) => {
+  const login = useCallback((newUser: SessionUser, apiKey: string) => {
     setUser(newUser);
-    setAiProvider(provider);
-    setAiKey(apiKey || null);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ user: newUser, aiProvider: provider, aiKey: apiKey || null }));
+    const key = apiKey.trim() || null;
+    setAiKey(key);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ user: newUser, aiKey: key }));
   }, []);
 
   const logout = useCallback(() => {
     setUser(null);
-    setAiProvider("none");
     setAiKey(null);
     localStorage.removeItem(STORAGE_KEY);
   }, []);
 
-  const hasAi = !!aiKey && aiProvider !== "none";
+  const hasAi = !!aiKey;
 
   const aiHeaders = useCallback((): Record<string, string> => {
     const h: Record<string, string> = { "Content-Type": "application/json" };
     if (aiKey) h["x-ai-key"] = aiKey;
-    if (aiProvider !== "none") h["x-ai-provider"] = aiProvider;
     return h;
-  }, [aiKey, aiProvider]);
+  }, [aiKey]);
 
-  // Don't render children until session is loaded from storage
   if (!loaded) return null;
 
   return (
     <AuthContext.Provider
       value={{
-        user,
-        aiProvider,
-        aiKey,
-        login,
-        logout,
+        user, aiKey,
+        login, logout,
         isDoctor: user?.role === "doctor",
         isNurse: user?.role === "nurse",
         isLoggedIn: !!user,

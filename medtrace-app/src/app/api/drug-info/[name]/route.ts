@@ -12,7 +12,7 @@ export async function GET(
   const { name } = await params;
   const startTime = Date.now();
   const drugName = decodeURIComponent(name);
-  const { provider, key } = getProviderAndKey(request);
+  const { key } = getProviderAndKey(request);
   const enhance = request.headers.get("x-enhance") === "true"; // only call AI if explicitly asked
   const db = getDb();
   const hash = crypto.createHash("sha256").update(drugName.toLowerCase().trim()).digest("hex");
@@ -35,24 +35,24 @@ export async function GET(
     // Serve database content INSTANTLY — no AI call
     return NextResponse.json({
       success: true,
-      data: { drug_name: drugName, summary: buildFallback(drugInfo), source: "database", drug_info: drugInfo, interactions, can_enhance: !!(provider && key) },
+      data: { drug_name: drugName, summary: buildFallback(drugInfo), source: "database", drug_info: drugInfo, interactions, can_enhance: !!key },
       error: null, meta: { ai_powered: false, query_time_ms: Date.now() - startTime },
     });
   }
 
   // === STEP 3: Found + enhance requested — call AI and cache ===
-  if (found && enhance && provider && key) {
+  if (found && enhance && key) {
     try {
-      logger.info(`AI-enhancing drug info: ${drugName} via ${provider}`);
-      const summary = await generateAiResponse(provider, key,
+      logger.info(`AI-enhancing drug info: ${drugName} via NVIDIA NIM`);
+      const summary = await generateAiResponse(key,
         `You are a clinical pharmacology AI in MedTrace hospital system. Using the verified drug data, generate a clear clinical summary. Format: ## Overview, ## How It Works, ## Uses, ## Important Warnings, ## Common Side Effects, ## Dosage Guidelines, ## Drug Interactions, ## Nursing Considerations. Be concise. Clinical language.`,
         `VERIFIED DRUG DATA:\n${context}`
       );
       db.prepare("INSERT OR REPLACE INTO drug_info_cache (id, drug_name, query_hash, ai_summary, ai_model, context_used, expires_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now', '+30 days'))")
-        .run(`cache-${Date.now()}`, drugName, hash, summary, provider, context);
+        .run(`cache-${Date.now()}`, drugName, hash, summary, "nvidia", context);
       return NextResponse.json({
         success: true,
-        data: { drug_name: drugName, summary, source: "ai-live", drug_info: drugInfo, interactions, ai_model: provider },
+        data: { drug_name: drugName, summary, source: "ai-live", drug_info: drugInfo, interactions, ai_model: "nvidia" },
         error: null, meta: { ai_powered: true, query_time_ms: Date.now() - startTime },
       });
     } catch (error) {
@@ -79,17 +79,17 @@ export async function GET(
     // If found after OpenFDA fetch, serve it
     if (found) {
       // If AI available, generate enhanced summary and cache
-      if (provider && key) {
+      if (key) {
         try {
-          const summary = await generateAiResponse(provider, key,
+          const summary = await generateAiResponse(key,
             `Clinical pharmacology AI. Generate a structured clinical summary from this drug data. Format with ## headings. Be concise.`,
             `DRUG DATA:\n${context}`
           );
           db.prepare("INSERT OR REPLACE INTO drug_info_cache (id, drug_name, query_hash, ai_summary, ai_model, context_used, expires_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now', '+30 days'))")
-            .run(`cache-${Date.now()}`, drugName, hash, summary, provider, context);
+            .run(`cache-${Date.now()}`, drugName, hash, summary, "nvidia", context);
           return NextResponse.json({
             success: true,
-            data: { drug_name: drugName, summary, source: "ai-live", drug_info: drugInfo, interactions, ai_model: provider },
+            data: { drug_name: drugName, summary, source: "ai-live", drug_info: drugInfo, interactions, ai_model: "nvidia" },
             error: null, meta: { ai_powered: true, query_time_ms: Date.now() - startTime },
           });
         } catch { /* fall through to database response */ }
@@ -102,21 +102,21 @@ export async function GET(
     }
 
     // === STEP 5: Not in OpenFDA either — pure AI generation ===
-    if (provider && key) {
+    if (key) {
       try {
-        const summary = await generateAiResponse(provider, key,
+        const summary = await generateAiResponse(key,
           "Clinical pharmacology AI. Provide comprehensive drug information.",
           `Provide clinical information about "${drugName}": overview, mechanism, indications, contraindications, side effects, dosage, interactions, nursing considerations. Format with ## headings.`
         );
         // Cache for 30 days
         db.prepare("INSERT OR REPLACE INTO drug_info_cache (id, drug_name, query_hash, ai_summary, ai_model, context_used, expires_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now', '+30 days'))")
-          .run(`cache-${Date.now()}`, drugName, hash, summary, provider, "ai-generated");
+          .run(`cache-${Date.now()}`, drugName, hash, summary, "nvidia", "ai-generated");
         // Add to drugs table for future search
         const existing = db.prepare("SELECT id FROM drugs WHERE LOWER(name) = LOWER(?)").get(drugName);
         if (!existing) db.prepare("INSERT INTO drugs (id, name) VALUES (?, ?)").run(`drug-ai-${Date.now()}`, drugName);
         return NextResponse.json({
           success: true,
-          data: { drug_name: drugName, summary, source: "ai-generated", drug_info: null, interactions: [], ai_model: provider },
+          data: { drug_name: drugName, summary, source: "ai-generated", drug_info: null, interactions: [], ai_model: "nvidia" },
           error: null, meta: { ai_powered: true, query_time_ms: Date.now() - startTime },
         });
       } catch (error) {
