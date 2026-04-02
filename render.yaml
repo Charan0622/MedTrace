@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: medtrace
+    runtime: node
+    region: oregon
+    rootDir: medtrace-app
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+    plan: free
+    healthCheckPath: /api/health
